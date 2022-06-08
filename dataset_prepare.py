@@ -1,0 +1,140 @@
+import json
+import shutil
+import os
+
+from tqdm import tqdm
+
+import numpy as np
+import random
+
+from PIL import Image
+
+from utils.general import xyxy2xywh
+
+
+def data_prepare():
+    random.seed(100)
+
+    path_train_dir = '/DATA/train'
+    new_dir = '../dataset'
+
+    # generate raw_train.json, raw_val.json
+    generate_raw_json = True
+    if generate_raw_json == True:
+        print('generate raw_train.json, raw_val.json')
+
+        if os.path.exists(new_dir):
+            shutil.rmtree(new_dir)
+        os.makedirs(new_dir + '/images/train')
+        os.makedirs(new_dir + '/images/val')
+        os.makedirs(new_dir + '/labels/train')
+        os.makedirs(new_dir + '/labels/val')
+
+        with open(path_train_dir + '/label/Train.json') as f:
+            json_data = json.load(f)
+
+            # generate images_id_name dict
+            json_images = json_data["images"]
+            images_id_name = {}
+
+            for image in json_images:
+                images_id_name[image['id']] = image['file_name']
+
+
+            trainval_id = random.sample(images_id_name.keys(), 1000)
+            val_id = random.sample(trainval_id, 300)
+            train_id = list(set(trainval_id) - set(val_id)) # 700
+
+
+            json_anno = json_data["annotations"]
+
+            json_anno_val = []
+            json_anno_train = []
+
+            for json_img in tqdm(json_anno):
+                image_id = json_img["image_id"]
+                json_img["file_name"] = images_id_name[image_id]
+
+                if image_id in val_id:
+                    json_anno_val.append(json_img)
+                elif image_id in train_id:
+                    json_anno_train.append(json_img)
+
+            json_data_val = {}
+            json_data_val['annotations'] = json_anno_val
+            json_data_train = {}
+            json_data_train['annotations'] = json_anno_train
+
+            if os.path.isfile(new_dir + '/raw_val.json'):
+                os.remove(new_dir + '/raw_val.json')
+            if os.path.isfile(new_dir + '/raw_train.json'):
+                os.remove(new_dir + '/raw_train.json')
+
+            with open(new_dir + '/raw_val.json', 'w') as f_val:
+                json.dump(json_data_val, f_val)
+            with open(new_dir + '/raw_train.json', 'w') as f_train:
+                json.dump(json_data_train, f_train)
+
+
+    # generate dataset/train, dataset/val
+    generate_dataset = True
+    if generate_dataset == True:
+        print('generate dataset/train, dataset/val')
+
+        with open(new_dir + '/raw_val.json') as f:
+            json_data = json.load(f)
+
+            json_anno = json_data["annotations"]
+
+            for json_img in tqdm(json_anno):
+                img_id = json_img['file_name']
+                txt_dir = new_dir + '/labels/val/' + img_id.split('.')[0] + '.txt'
+                img_dir = new_dir + '/images/val/' + img_id
+
+                f_txt = open(txt_dir, 'a')
+                img_ = Image.open(path_train_dir + '/images/' + img_id)
+                img_size = img_.size
+
+                # class_id = str(names.index(json_img['category_id']))
+                class_id = json_img['category_id'] - 1
+                img_pos = json_img['bbox'] # xywh
+
+                # xywh = xyxy2xywh(np.array([[img_pos[0]/img_size[0], img_pos[1]/img_size[1], img_pos[2]/img_size[0], img_pos[3]/img_size[1]]]))[0]
+                x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+                y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+                xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+                f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+                f_txt.close()
+
+                shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+        with open(new_dir + '/raw_train.json') as f:
+            json_data = json.load(f)
+            json_anno = json_data["annotations"]
+
+            for json_img in tqdm(json_anno):
+                img_id = json_img['file_name']
+                txt_dir = new_dir + '/labels/train/' + img_id.split('.')[0] + '.txt'
+                img_dir = new_dir + '/images/train/' + img_id
+
+                f_txt = open(txt_dir, 'a')
+                img_ = Image.open(path_train_dir + '/images/' + img_id)
+                img_size = img_.size
+                objects_yolo = ''
+
+                class_id = json_img['category_id'] - 1
+                img_pos = json_img['bbox']
+
+                x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+                y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+                xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+                f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+                f_txt.close()
+
+                shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+
+if __name__ == '__main__':
+    data_prepare()
