@@ -1,0 +1,9 @@
+# Train/val/test sets as 1) dir: path/to/imgs, 2) file: path/to/imgs.txt, or 3) list: [path/to/imgs1, path/to/imgs2, ..]
+train: ../dataset/images/train  # train images (relative to 'path') 118287 images
+val: ../dataset/images/val  # val images (relative to 'path') 5000 images
+test: ../dataset/images/val  # 20288 of 40670 images, submit to https://competitions.codalab.org/competitions/20794
+
+# Classes
+nc: 14  # number of classes
+names: ['세단(승용차)', 'SUV', '승합차', '버스', '학원차량(통학버스)', '트럭', '택시', '성인', '어린이', '오토바이',
+        '전동킥보드', '자전거', '유모차', '쇼핑카트']  # class names
