@@ -140,5 +140,91 @@ def data_prepare():
                 shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
 
 
+    # generate diet_train.json
+    generate_diet_json = True
+    if generate_diet_json == True:
+        print('generate diet_train.json')
+
+        with open(path_train_dir + '/label/Train.json') as f:
+            json_data = json.load(f)
+
+            # generate images_id_name dict
+            json_images = json_data["images"]
+            images_id_name = {}
+
+            for image in json_images:
+                images_id_name[image['id']] = image['file_name']
+
+
+            count_labels = [0] * 14
+
+            image_id_diet = []
+
+            # json_anno = json_data["annotations"]
+            # for anno in tqdm(json_anno):
+            #     count_labels[anno["category_id"]-1] += 1
+            #     if anno["category_id"] in [11, 13]:
+            #         if not anno["image_id"] in image_id_diet:
+            #             image_id_diet.append(anno["image_id"])
+
+            json_anno = json_data["annotations"]
+            i_12 = 0
+            for anno in tqdm(json_anno):
+                count_labels[anno["category_id"]-1] += 1
+                if anno["category_id"] in [9, 11, 13]:
+                    if not anno["image_id"] in image_id_diet:
+                        image_id_diet.append(anno["image_id"])
+                if anno["category_id"] in [5, 7, 12]:
+                    i_12 += 1
+                    if i_12 % 20 == 0 and not anno["image_id"] in image_id_diet:
+                        image_id_diet.append(anno["image_id"])
+
+            print(count_labels)
+            print(len(images_id_name))
+
+            count_labels_diet = [0] * 14
+
+            for anno in tqdm(json_anno):
+                if anno["image_id"] in image_id_diet:
+                    count_labels_diet[anno["category_id"]-1] += 1
+            
+            print(count_labels_diet)
+            print(len(image_id_diet))
+
+
+
+            new_diet_dir = '../dataset_diet'
+
+            if os.path.exists(new_diet_dir):
+                shutil.rmtree(new_diet_dir)
+            os.makedirs(new_diet_dir + '/images/train')
+            os.makedirs(new_diet_dir + '/labels/train')
+
+            for anno in tqdm(json_anno):
+                
+
+                if anno["image_id"] in image_id_diet:
+                    img_id = images_id_name[anno["image_id"]]
+                    txt_dir = new_diet_dir + '/labels/train/' + img_id.split('.')[0] + '.txt'
+                    img_dir = new_diet_dir + '/images/train/' + img_id
+
+                    f_txt = open(txt_dir, 'a')
+                    img_ = Image.open(path_train_dir + '/images/' + img_id)
+                    img_size = img_.size
+                    objects_yolo = ''
+
+                    class_id = anno['category_id'] - 1
+                    img_pos = anno['bbox']
+
+                    x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+                    y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+                    xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+                    f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+                    f_txt.close()
+
+                    shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+
 if __name__ == '__main__':
     data_prepare()
