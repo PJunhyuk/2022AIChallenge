@@ -55,17 +55,18 @@ def save_one_txt(predn, save_conf, shape, file):
             f.write(('%g ' * len(line)).rstrip() % line + '\n')
 
 
-def save_one_json(predn, jdict, path, class_map):
+def save_one_json(predn, jdict, path, class_map, images_name_id):
     # Save one JSON result {"image_id": 42, "category_id": 18, "bbox": [258.15, 41.29, 348.26, 243.78], "score": 0.236}
     image_id = int(path.stem) if path.stem.isnumeric() else path.stem
     box = xyxy2xywh(predn[:, :4])  # xywh
     box[:, :2] -= box[:, 2:] / 2  # xy center to top-left corner
     for p, b in zip(predn.tolist(), box.tolist()):
         jdict.append({
-            'image_id': image_id,
-            'category_id': class_map[int(p[5])],
+            'image_id': images_name_id[image_id],
+            'category_id': class_map[int(p[5])]+1,
             'bbox': [round(x, 3) for x in b],
-            'score': round(p[4], 5)})
+            'score': round(p[4], 5),
+            'segmentation': []})
 
 
 def process_batch(detections, labels, iouv):
@@ -190,6 +191,17 @@ def run(
     jdict, stats, ap, ap_class = [], [], [], []
     callbacks.run('on_val_start')
     pbar = tqdm(dataloader, desc=s, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
+
+    with open('/DATA/test/Test_Images_Information.json') as f:
+        json_data = json.load(f)
+
+        # generate images_id_name dict
+        json_images = json_data["images"]
+        images_name_id = {}
+
+        for image in json_images:
+            images_name_id[image['file_name'].split('.')[0]] = image['id']
+
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run('on_val_batch_start')
         t1 = time_sync()
@@ -250,7 +262,7 @@ def run(
             if save_txt:
                 save_one_txt(predn, save_conf, shape, file=save_dir / 'labels' / (path.stem + '.txt'))
             if save_json:
-                save_one_json(predn, jdict, path, class_map)  # append to COCO-JSON dictionary
+                save_one_json(predn, jdict, path, class_map, images_name_id)  # append to COCO-JSON dictionary
             callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
 
         # Plot images
