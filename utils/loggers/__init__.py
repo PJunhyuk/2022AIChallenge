@@ -49,6 +49,7 @@ class Loggers():
             'metrics/precision',
             'metrics/recall',
             'metrics/mAP_0.5',
+            'metrics/mAP_0.75',
             'metrics/mAP_0.5:0.95',  # metrics
             'val/box_loss',
             'val/obj_loss',
