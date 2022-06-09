@@ -45,6 +45,8 @@ from utils.general import (LOGGER, check_file, check_img_size, check_imshow, che
 from utils.plots import Annotator, colors, save_one_box
 from utils.torch_utils import select_device, time_sync
 
+import json
+from tqdm import tqdm
 
 @torch.no_grad()
 def run(
@@ -58,6 +60,7 @@ def run(
         device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         view_img=False,  # show results
         save_txt=False,  # save results to *.txt
+        save_json=True,
         save_conf=False,  # save confidences in --save-txt labels
         save_crop=False,  # save cropped prediction boxes
         nosave=False,  # do not save images/videos
@@ -83,6 +86,8 @@ def run(
     if is_url and is_file:
         source = check_file(source)  # download
 
+    jdict_list = []
+
     # Directories
     save_dir = increment_path(Path(project) / name, exist_ok=exist_ok)  # increment run
     (save_dir / 'labels' if save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
@@ -107,7 +112,7 @@ def run(
     # Run inference
     model.warmup(imgsz=(1 if pt else bs, 3, *imgsz))  # warmup
     dt, seen = [0.0, 0.0, 0.0], 0
-    for path, im, im0s, vid_cap, s in dataset:
+    for path, im, im0s, vid_cap, s in tqdm(dataset):
         t1 = time_sync()
         im = torch.from_numpy(im).to(device)
         im = im.half() if model.fp16 else im.float()  # uint8 to fp16/32
@@ -146,6 +151,18 @@ def run(
             gn = torch.tensor(im0.shape)[[1, 0, 1, 0]]  # normalization gain whwh
             imc = im0.copy() if save_crop else im0  # for save_crop
             annotator = Annotator(im0, line_width=line_thickness, example=str(names))
+
+            if save_json:
+                with open('/DATA/test/Test_Images_Information.json') as f:
+                    json_data = json.load(f)
+
+                    # generate images_id_name dict
+                    json_images = json_data["images"]
+                    images_name_id = {}
+
+                    for image in json_images:
+                        images_name_id[image['file_name'].split('.')[0]] = image['id']
+
             if len(det):
                 # Rescale boxes from img_size to im0 size
                 det[:, :4] = scale_coords(im.shape[2:], det[:, :4], im0.shape).round()
@@ -157,6 +174,22 @@ def run(
 
                 # Write results
                 for *xyxy, conf, cls in reversed(det):
+                    if save_json:
+                        det_dict = {}
+                        det_dict["image_id"] = images_name_id[p.stem]
+                        det_dict["category_id"] = int(cls)+1
+
+                        _x = float(xyxy[0])
+                        _y = float(xyxy[1])
+                        _w = float(xyxy[2]) - float(xyxy[0])
+                        _h = float(xyxy[3]) - float(xyxy[1])
+                        det_dict["bbox"] = [_x, _y, _w, _h]
+
+                        det_dict["score"] = float(conf)
+                        det_dict["segmentation"] = []
+
+                        jdict_list.append(det_dict)
+
                     if save_txt:  # Write to file
                         xywh = (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn).view(-1).tolist()  # normalized xywh
                         line = (cls, *xywh, conf) if save_conf else (cls, *xywh)  # label format
@@ -196,7 +229,11 @@ def run(
                     vid_writer[i].write(im0)
 
         # Print time (inference-only)
-        LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
+        # LOGGER.info(f'{s}Done. ({t3 - t2:.3f}s)')
+
+    if save_json:
+        with open(str(save_dir / 'results.json'), 'w') as f:
+            json.dump(jdict_list, f)
 
     # Print results
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
@@ -216,10 +253,11 @@ def parse_opt():
     parser.add_argument('--imgsz', '--img', '--img-size', nargs='+', type=int, default=[640], help='inference size h,w')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.45, help='NMS IoU threshold')
-    parser.add_argument('--max-det', type=int, default=1000, help='maximum detections per image')
+    parser.add_argument('--max-det', type=int, default=50, help='maximum detections per image')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--view-img', action='store_true', help='show results')
     parser.add_argument('--save-txt', action='store_true', help='save results to *.txt')
+    parser.add_argument('--save-json', action='store_false')
     parser.add_argument('--save-conf', action='store_true', help='save confidences in --save-txt labels')
     parser.add_argument('--save-crop', action='store_true', help='save cropped prediction boxes')
     parser.add_argument('--nosave', action='store_true', help='do not save images/videos')
