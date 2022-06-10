@@ -12,10 +12,10 @@ from PIL import Image
 from utils.general import xyxy2xywh
 
 
-def data_prepare():
+def data_prepare(opt):
     random.seed(100)
 
-    path_train_dir = '/DATA/train'
+    path_train_dir = opt.path_train_dir
     new_dir = '../dataset'
 
     # generate raw_train.json, raw_val.json
@@ -238,5 +238,15 @@ def data_prepare():
                     shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
 
 
+def parse_opt(known=False):
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--path_train_dir', type=str, default='/DATA/train', help='initial weights path')
+
+    opt = parser.parse_known_args()[0] if known else parser.parse_args()
+    return opt
+
+
 if __name__ == '__main__':
-    data_prepare()
+    opt = parse_opt()
+    data_prepare(opt)
