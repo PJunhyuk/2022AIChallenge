@@ -19,7 +19,7 @@ def data_prepare():
     new_dir = '../dataset'
 
     # generate raw_train.json, raw_val.json
-    generate_raw_json = False
+    generate_raw_json = True
     if generate_raw_json == True:
         print('generate raw_train.json, raw_val.json')
 
@@ -81,7 +81,7 @@ def data_prepare():
 
 
     # generate dataset/train, dataset/val
-    generate_dataset = False
+    generate_dataset = True
     if generate_dataset == True:
         print('generate dataset/train, dataset/val')
 
