@@ -15,7 +15,8 @@ from utils.general import xyxy2xywh
 def data_prepare(opt):
     random.seed(100)
 
-    path_train_dir = opt.path_train_dir
+    path_train_dir = opt.path_DATA_dir + '/train'
+    path_test_dir = opt.path_DATA_dir + '/test'
     new_dir = '../dataset'
 
     # generate raw_train.json, raw_val.json
@@ -145,11 +146,11 @@ def data_prepare(opt):
     if generate_dataset_test_imgs == True:
         f_txt = open('../dataset/test_imgs.txt', 'w')
 
-        with open('/DATA/test/Test_Images_Information.json') as f:
+        with open(path_test_dir + '/Test_Images_Information.json') as f:
             json_data = json.load(f)
 
             for image in tqdm(json_data["images"]):
-                image_path = "/DATA/test/images/" + image["file_name"]
+                image_path = path_test_dir + "/images/" + image["file_name"]
                 f_txt.write(f"{image_path}\n")
 
 
@@ -241,7 +242,7 @@ def data_prepare(opt):
 def parse_opt(known=False):
 
     parser = argparse.ArgumentParser()
-    parser.add_argument('--path_train_dir', type=str, default='/DATA/train', help='initial weights path')
+    parser.add_argument('--path_DATA_dir', type=str, default='/DATA', help='initial weights path')
 
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt
