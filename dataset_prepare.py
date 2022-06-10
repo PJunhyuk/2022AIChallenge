@@ -19,7 +19,7 @@ def data_prepare():
     new_dir = '../dataset'
 
     # generate raw_train.json, raw_val.json
-    generate_raw_json = True
+    generate_raw_json = False
     if generate_raw_json == True:
         print('generate raw_train.json, raw_val.json')
 
@@ -81,7 +81,7 @@ def data_prepare():
 
 
     # generate dataset/train, dataset/val
-    generate_dataset = True
+    generate_dataset = False
     if generate_dataset == True:
         print('generate dataset/train, dataset/val')
 
@@ -140,10 +140,29 @@ def data_prepare():
                 shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
 
 
-    # generate diet_train.json
-    generate_diet_json = True
-    if generate_diet_json == True:
-        print('generate diet_train.json')
+    # generate dataset/test_imgs.txt
+    generate_dataset_test_imgs = True
+    if generate_dataset_test_imgs == True:
+        f_txt = open('../dataset/test_imgs.txt', 'w')
+
+        with open('/DATA/test/Test_Images_Information.json') as f:
+            json_data = json.load(f)
+
+            for image in tqdm(json_data["images"]):
+                image_path = "/DATA/test/images/" + image["file_name"]
+                f_txt.write(f"{image_path}\n")
+
+
+    # generate dataset_diet/train
+    generate_dataset_diet = True
+    if generate_dataset_diet == True:
+        print('generate dataset_diet/train')
+
+        diet_dir = '../dataset_diet'
+        if os.path.exists(diet_dir):
+            shutil.rmtree(diet_dir)
+        os.makedirs(diet_dir + '/images/train')
+        os.makedirs(diet_dir + '/labels/train')
 
         with open(path_train_dir + '/label/Train.json') as f:
             json_data = json.load(f)
@@ -155,54 +174,47 @@ def data_prepare():
             for image in json_images:
                 images_id_name[image['id']] = image['file_name']
 
+            # count images per class
+            count_classes = [0] * 14
+            json_anno = json_data["annotations"]
+            for anno in json_anno:
+                count_classes[anno["category_id"]-1] += 1
+            print('Count images per classes: ', count_classes)
+            print('Ratio: ', [round(100*i/sum(count_classes),4) for i in count_classes])
+            print('Total images: ', len(images_id_name))
 
-            count_labels = [0] * 14
-
+            # generate image_id_diet
+            print("!!!!!DIET!!!!!")
             image_id_diet = []
-
-            # json_anno = json_data["annotations"]
-            # for anno in tqdm(json_anno):
-            #     count_labels[anno["category_id"]-1] += 1
-            #     if anno["category_id"] in [11, 13]:
-            #         if not anno["image_id"] in image_id_diet:
-            #             image_id_diet.append(anno["image_id"])
-
             json_anno = json_data["annotations"]
             i_12 = 0
-            for anno in tqdm(json_anno):
-                count_labels[anno["category_id"]-1] += 1
-                if anno["category_id"] in [9, 11, 13]:
+            for anno in json_anno:
+                if anno["category_id"] in [4, 5, 7, 9, 11, 13]:
                     if not anno["image_id"] in image_id_diet:
                         image_id_diet.append(anno["image_id"])
-                if anno["category_id"] in [5, 7, 12]:
+                if anno["category_id"] in [12]:
                     i_12 += 1
                     if i_12 % 20 == 0 and not anno["image_id"] in image_id_diet:
                         image_id_diet.append(anno["image_id"])
 
-            print(count_labels)
-            print(len(images_id_name))
-
-            count_labels_diet = [0] * 14
-
+            # count images per class - diet
+            count_classes_diet = [0] * 14
             for anno in tqdm(json_anno):
                 if anno["image_id"] in image_id_diet:
-                    count_labels_diet[anno["category_id"]-1] += 1
-            
-            print(count_labels_diet)
-            print(len(image_id_diet))
+                    count_classes_diet[anno["category_id"]-1] += 1
+            print('count images per classs: ', count_classes_diet)
+            print('Ratio: ', [round(100*i/sum(count_classes_diet),4) for i in count_classes_diet])
+            print('Total images: ', len(image_id_diet))
 
-
-
+            # set dataset_diet
             new_diet_dir = '../dataset_diet'
-
             if os.path.exists(new_diet_dir):
                 shutil.rmtree(new_diet_dir)
             os.makedirs(new_diet_dir + '/images/train')
             os.makedirs(new_diet_dir + '/labels/train')
 
+            # set images&labels in dataset_diet
             for anno in tqdm(json_anno):
-                
-
                 if anno["image_id"] in image_id_diet:
                     img_id = images_id_name[anno["image_id"]]
                     txt_dir = new_diet_dir + '/labels/train/' + img_id.split('.')[0] + '.txt'
