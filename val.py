@@ -1,23 +1,3 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
-"""
-Validate a trained YOLOv5 model accuracy on a custom dataset
-
-Usage:
-    $ python path/to/val.py --weights yolov5s.pt --data coco128.yaml --img 640
-
-Usage - formats:
-    $ python path/to/val.py --weights yolov5s.pt                 # PyTorch
-                                      yolov5s.torchscript        # TorchScript
-                                      yolov5s.onnx               # ONNX Runtime or OpenCV DNN with --dnn
-                                      yolov5s.xml                # OpenVINO
-                                      yolov5s.engine             # TensorRT
-                                      yolov5s.mlmodel            # CoreML (macOS-only)
-                                      yolov5s_saved_model        # TensorFlow SavedModel
-                                      yolov5s.pb                 # TensorFlow GraphDef
-                                      yolov5s.tflite             # TensorFlow Lite
-                                      yolov5s_edgetpu.tflite     # TensorFlow Edge TPU
-"""
-
 import argparse
 import json
 import os
@@ -307,26 +287,10 @@ def run(
         w = Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
         anno_json = str(Path(data.get('path', '../coco')) / 'annotations/instances_val2017.json')  # annotations json
         pred_json = str(save_dir / f"{w}_predictions.json")  # predictions json
-        LOGGER.info(f'\nEvaluating pycocotools mAP... saving {pred_json}...')
+
+        LOGGER.info(f'\nsaving {pred_json}...')
         with open(pred_json, 'w') as f:
             json.dump(jdict, f)
-
-        try:  # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-            check_requirements(['pycocotools'])
-            from pycocotools.coco import COCO
-            from pycocotools.cocoeval import COCOeval
-
-            anno = COCO(anno_json)  # init annotations api
-            pred = anno.loadRes(pred_json)  # init predictions api
-            eval = COCOeval(anno, pred, 'bbox')
-            if is_coco:
-                eval.params.imgIds = [int(Path(x).stem) for x in dataloader.dataset.im_files]  # image IDs to evaluate
-            eval.evaluate()
-            eval.accumulate()
-            eval.summarize()
-            map, map75, map50 = eval.stats[:3]  # update results (mAP@0.5:0.95, mAP@0.75, mAP@0.5)
-        except Exception as e:
-            LOGGER.info(f'pycocotools unable to run: {e}')
 
     # Return results
     model.float()  # for training
