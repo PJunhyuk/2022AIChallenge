@@ -106,7 +106,9 @@ def create_dataloader(path,
                       image_weights=False,
                       quad=False,
                       prefix='',
-                      shuffle=False):
+                      shuffle=False,
+                      task='',
+                      epoch_parts=1):
     if rect and shuffle:
         LOGGER.warning('WARNING: --rect is incompatible with DataLoader shuffle, setting shuffle=False')
         shuffle = False
@@ -128,7 +130,18 @@ def create_dataloader(path,
     batch_size = min(batch_size, len(dataset))
     nd = torch.cuda.device_count()  # number of CUDA devices
     nw = min([os.cpu_count() // max(nd, 1), batch_size if batch_size > 1 else 0, workers])  # number of workers
-    sampler = None if rank == -1 else distributed.DistributedSampler(dataset, shuffle=shuffle)
+
+    if rank != -1:
+        if task == 'train':
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset, num_replicas=world_size*epoch_parts)
+        else:
+            sampler = torch.utils.data.distributed.DistributedSampler(dataset)
+    else:
+        if task == 'train':
+            sampler = torch.utils.data.RandomSampler(dataset, replacement=True, num_samples=int(len(dataset)/epoch_parts))
+        else:
+            sampler = None
+
     loader = DataLoader if image_weights else InfiniteDataLoader  # only DataLoader allows for attribute updates
     return loader(dataset,
                   batch_size=batch_size,
