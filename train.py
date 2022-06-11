@@ -1,17 +1,3 @@
-# YOLOv5 🚀 by Ultralytics, GPL-3.0 license
-"""
-Train a YOLOv5 model on a custom dataset.
-
-Models and datasets download automatically from the latest YOLOv5 release.
-Models: https://github.com/ultralytics/yolov5/tree/master/models
-Datasets: https://github.com/ultralytics/yolov5/tree/master/data
-Tutorial: https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data
-
-Usage:
-    $ python path/to/train.py --data coco128.yaml --weights yolov5s.pt --img 640  # from pretrained (RECOMMENDED)
-    $ python path/to/train.py --data coco128.yaml --weights '' --cfg yolov5s.yaml --img 640  # from scratch
-"""
-
 import argparse
 import math
 import os
@@ -48,12 +34,12 @@ from utils.downloads import attempt_download
 from utils.general import (LOGGER, check_amp, check_dataset, check_file, check_git_status, check_img_size,
                            check_requirements, check_suffix, check_version, check_yaml, colorstr, get_latest_run,
                            increment_path, init_seeds, intersect_dicts, labels_to_class_weights,
-                           labels_to_image_weights, methods, one_cycle, print_args, print_mutation, strip_optimizer)
+                           labels_to_image_weights, methods, one_cycle, print_args, strip_optimizer)
 from utils.loggers import Loggers
 from utils.loggers.wandb.wandb_utils import check_wandb_resume
 from utils.loss import ComputeLoss
 from utils.metrics import fitness
-from utils.plots import plot_evolve, plot_labels
+from utils.plots import plot_labels
 from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, select_device, torch_distributed_zero_first
 
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
@@ -62,14 +48,14 @@ WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
 
 
 def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictionary
-    save_dir, epochs, batch_size, weights, single_cls, evolve, data, cfg, resume, noval, nosave, workers, freeze = \
-        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.weights, opt.single_cls, opt.evolve, opt.data, opt.cfg, \
+    save_dir, epochs, batch_size, weights, single_cls, data, cfg, resume, noval, nosave, workers, freeze = \
+        Path(opt.save_dir), opt.epochs, opt.batch_size, opt.weights, opt.single_cls, opt.data, opt.cfg, \
         opt.resume, opt.noval, opt.nosave, opt.workers, opt.freeze
     callbacks.run('on_pretrain_routine_start')
 
     # Directories
     w = save_dir / 'weights'  # weights dir
-    (w.parent if evolve else w).mkdir(parents=True, exist_ok=True)  # make dir
+    w.mkdir(parents=True, exist_ok=True)  # make dir
     last, best = w / 'last.pt', w / 'best.pt'
 
     # Hyperparameters
@@ -79,11 +65,10 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
     LOGGER.info(colorstr('hyperparameters: ') + ', '.join(f'{k}={v}' for k, v in hyp.items()))
 
     # Save run settings
-    if not evolve:
-        with open(save_dir / 'hyp.yaml', 'w') as f:
-            yaml.safe_dump(hyp, f, sort_keys=False)
-        with open(save_dir / 'opt.yaml', 'w') as f:
-            yaml.safe_dump(vars(opt), f, sort_keys=False)
+    with open(save_dir / 'hyp.yaml', 'w') as f:
+        yaml.safe_dump(hyp, f, sort_keys=False)
+    with open(save_dir / 'opt.yaml', 'w') as f:
+        yaml.safe_dump(vars(opt), f, sort_keys=False)
 
     # Loggers
     data_dict = None
@@ -99,7 +84,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             callbacks.register_action(k, callback=getattr(loggers, k))
 
     # Config
-    plots = not evolve and not opt.noplots  # create plots
+    plots = not opt.noplots  # create plots
     cuda = device.type != 'cpu'
     init_seeds(1 + RANK)
     with torch_distributed_zero_first(LOCAL_RANK):
@@ -412,7 +397,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
             callbacks.run('on_fit_epoch_end', log_vals, epoch, best_fitness, fi)
 
             # Save model
-            if (not nosave) or (final_epoch and not evolve):  # if save
+            if (not nosave) or (final_epoch):  # if save
                 ckpt = {
                     'epoch': epoch,
                     'best_fitness': best_fitness,
@@ -494,7 +479,6 @@ def parse_opt(known=False):
     parser.add_argument('--noval', action='store_true', help='only validate final epoch')
     parser.add_argument('--noautoanchor', action='store_true', help='disable AutoAnchor')
     parser.add_argument('--noplots', action='store_true', help='save no plot files')
-    parser.add_argument('--evolve', type=int, nargs='?', const=300, help='evolve hyperparameters for x generations')
     parser.add_argument('--bucket', type=str, default='', help='gsutil bucket')
     parser.add_argument('--cache', type=str, nargs='?', const='ram', help='--cache images in "ram" (default) or "disk"')
     parser.add_argument('--image-weights', action='store_true', help='use weighted image selection for training')
@@ -535,7 +519,7 @@ def main(opt, callbacks=Callbacks()):
         check_requirements(exclude=['thop'])
 
     # Resume
-    if opt.resume and not check_wandb_resume(opt) and not opt.evolve:  # resume an interrupted run
+    if opt.resume and not check_wandb_resume(opt):  # resume an interrupted run
         ckpt = opt.resume if isinstance(opt.resume, str) else get_latest_run()  # specified or most recent path
         assert os.path.isfile(ckpt), 'ERROR: --resume checkpoint does not exist'
         with open(Path(ckpt).parent.parent / 'opt.yaml', errors='ignore') as f:
@@ -546,10 +530,6 @@ def main(opt, callbacks=Callbacks()):
         opt.data, opt.cfg, opt.hyp, opt.weights, opt.project = \
             check_file(opt.data), check_yaml(opt.cfg), check_yaml(opt.hyp), str(opt.weights), str(opt.project)  # checks
         assert len(opt.cfg) or len(opt.weights), 'either --cfg or --weights must be specified'
-        if opt.evolve:
-            if opt.project == str(ROOT / 'runs/train'):  # if default project name, rename to runs/evolve
-                opt.project = str(ROOT / 'runs/evolve')
-            opt.exist_ok, opt.resume = opt.resume, False  # pass resume to exist_ok and disable resume
         if opt.name == 'cfg':
             opt.name = Path(opt.cfg).stem  # use model.yaml as name
         opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))
@@ -559,7 +539,6 @@ def main(opt, callbacks=Callbacks()):
     if LOCAL_RANK != -1:
         msg = 'is not compatible with YOLOv5 Multi-GPU DDP training'
         assert not opt.image_weights, f'--image-weights {msg}'
-        assert not opt.evolve, f'--evolve {msg}'
         assert opt.batch_size != -1, f'AutoBatch with --batch-size -1 {msg}, please pass a valid --batch-size'
         assert opt.batch_size % WORLD_SIZE == 0, f'--batch-size {opt.batch_size} must be multiple of WORLD_SIZE'
         assert torch.cuda.device_count() > LOCAL_RANK, 'insufficient CUDA devices for DDP command'
@@ -568,11 +547,10 @@ def main(opt, callbacks=Callbacks()):
         dist.init_process_group(backend="nccl" if dist.is_nccl_available() else "gloo")
 
     # Train
-    if not opt.evolve:
-        train(opt.hyp, opt, device, callbacks)
-        if WORLD_SIZE > 1 and RANK == 0:
-            LOGGER.info('Destroying process group... ')
-            dist.destroy_process_group()
+    train(opt.hyp, opt, device, callbacks)
+    if WORLD_SIZE > 1 and RANK == 0:
+        LOGGER.info('Destroying process group... ')
+        dist.destroy_process_group()
 
 
 def run(**kwargs):

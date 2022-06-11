@@ -70,7 +70,7 @@ class Loggers():
 
         # TensorBoard
         s = self.save_dir
-        if 'tb' in self.include and not self.opt.evolve:
+        if 'tb' in self.include:
             prefix = colorstr('TensorBoard: ')
             self.logger.info(f"{prefix}Start with 'tensorboard --logdir {s.parent}', view at http://localhost:6006/")
             self.tb = SummaryWriter(str(s))
@@ -174,11 +174,10 @@ class Loggers():
             self.wandb.log(dict(zip(self.keys[3:10], results)))
             self.wandb.log({"Results": [wandb.Image(str(f), caption=f.name) for f in files]})
             # Calling wandb.log. TODO: Refactor this into WandbLogger.log_model
-            if not self.opt.evolve:
-                wandb.log_artifact(str(best if best.exists() else last),
-                                   type='model',
-                                   name=f'run_{self.wandb.wandb_run.id}_model',
-                                   aliases=['latest', 'best', 'stripped'])
+            wandb.log_artifact(str(best if best.exists() else last),
+                                type='model',
+                                name=f'run_{self.wandb.wandb_run.id}_model',
+                                aliases=['latest', 'best', 'stripped'])
             self.wandb.finish_run()
 
     def on_params_update(self, params):

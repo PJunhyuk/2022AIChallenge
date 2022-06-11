@@ -890,46 +890,6 @@ def strip_optimizer(f='best.pt', s=''):  # from utils.general import *; strip_op
     LOGGER.info(f"Optimizer stripped from {f},{f' saved as {s},' if s else ''} {mb:.1f}MB")
 
 
-def print_mutation(results, hyp, save_dir, bucket, prefix=colorstr('evolve: ')):
-    evolve_csv = save_dir / 'evolve.csv'
-    evolve_yaml = save_dir / 'hyp_evolve.yaml'
-    keys = ('metrics/precision', 'metrics/recall', 'metrics/mAP_0.5', 'metrics/mAP_0.5:0.95', 'val/box_loss',
-            'val/obj_loss', 'val/cls_loss') + tuple(hyp.keys())  # [results + hyps]
-    keys = tuple(x.strip() for x in keys)
-    vals = results + tuple(hyp.values())
-    n = len(keys)
-
-    # Download (optional)
-    if bucket:
-        url = f'gs://{bucket}/evolve.csv'
-        if gsutil_getsize(url) > (evolve_csv.stat().st_size if evolve_csv.exists() else 0):
-            os.system(f'gsutil cp {url} {save_dir}')  # download evolve.csv if larger than local
-
-    # Log to evolve.csv
-    s = '' if evolve_csv.exists() else (('%20s,' * n % keys).rstrip(',') + '\n')  # add header
-    with open(evolve_csv, 'a') as f:
-        f.write(s + ('%20.5g,' * n % vals).rstrip(',') + '\n')
-
-    # Save yaml
-    with open(evolve_yaml, 'w') as f:
-        data = pd.read_csv(evolve_csv)
-        data = data.rename(columns=lambda x: x.strip())  # strip keys
-        i = np.argmax(fitness(data.values[:, :4]))  #
-        generations = len(data)
-        f.write('# YOLOv5 Hyperparameter Evolution Results\n' + f'# Best generation: {i}\n' +
-                f'# Last generation: {generations - 1}\n' + '# ' + ', '.join(f'{x.strip():>20s}' for x in keys[:7]) +
-                '\n' + '# ' + ', '.join(f'{x:>20.5g}' for x in data.values[i, :7]) + '\n\n')
-        yaml.safe_dump(data.loc[i][7:].to_dict(), f, sort_keys=False)
-
-    # Print to screen
-    LOGGER.info(prefix + f'{generations} generations finished, current result:\n' + prefix +
-                ', '.join(f'{x.strip():>20s}' for x in keys) + '\n' + prefix + ', '.join(f'{x:20.5g}'
-                                                                                         for x in vals) + '\n\n')
-
-    if bucket:
-        os.system(f'gsutil cp {evolve_csv} {evolve_yaml} gs://{bucket}')  # upload
-
-
 def apply_classifier(x, model, img, im0):
     # Apply a second stage classifier to YOLO outputs
     # Example model = torchvision.models.__dict__['efficientnet_b0'](pretrained=True).to(device).eval()
