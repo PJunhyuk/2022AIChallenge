@@ -171,3 +171,30 @@ $ python val.py --batch 4 --weights runs/inf-a/exp6/weights/last.pt --data data/
 $ python val.py --batch 4 --weights runs/inf-b/exp6/weights/last.pt --data data/dataset.yaml --img 1280 --task test --save-json --conf-thres 0.1
 
 ```
+
+- - -
+
+## Reproducibility
+
+본 repo에서는 `utils/general.py`에서 `init_seeds` 함수를 통해 Reproducibility를 제어합니다.
+
+```python
+def init_seeds(seed=0):
+    # Initialize random number generator (RNG) seeds https://pytorch.org/docs/stable/notes/randomness.html
+    # cudnn seed 0 settings are slower and more reproducible, else faster and less reproducible
+    import torch.backends.cudnn as cudnn
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed) # if use multi-GPU
+    cudnn.benchmark, cudnn.deterministic = (False, True) if seed == 0 else (True, False)
+```
+
+그러나 PyTorch는 공식적으로 완벽히 Reproducibility를 제어할 수 없다고 합니다. 대표적으로 CUDA 함수를 사용하는 PyTorch 함수들 중 nondeterministic한 함수들이 존재합니다. 본 repo는 이 중 불가피하게 `torch.nn.funcional.interpolate()`를 사용하고 있어, 완벽한 Reproducibility 제어가 불가합니다.
+- 레퍼런스: [Reproducible PyTorch를 위한 randomness 올바르게 제어하기!](https://hoya012.github.io/blog/reproducible_pytorch/)
+
+실제로 같은 조건에서 학습을 진행해도 조금씩 다르게 계산되는 모습을 확인할 수 있었습니다.
+- 위에 언급한 `torch.nn.funcional.interpolate()` 함수, 혹은 obj loss를 계산하는 과정에서 연산되는 `bcewithlogitsloss`에서 Reproducibility가 깨지는 것으로 추정됩니다.
+
+때문에 본 repo에서는 완벽한 Reproducibility가 구현되어 있지는 않은 점을 감안 부탁드립니다. 그러나 위의 작업들로 최대한의 Reproducibility는 확보하여, 불가피한 정말 작은 차이들만이 존재합니다.  
