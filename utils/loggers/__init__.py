@@ -36,6 +36,20 @@ class Loggers():
             'metrics/mAP_0.5',
             'metrics/mAP_0.75',
             'metrics/mAP_0.5:0.95',  # metrics
+            'class_0.75/sedan',
+            'class_0.75/SUV',
+            'class_0.75/van',
+            'class_0.75/bus',
+            'class_0.75/school_bus',
+            'class_0.75/truck',
+            'class_0.75/taxi',
+            'class_0.75/adult',
+            'class_0.75/child',
+            'class_0.75/motorcycle',
+            'class_0.75/kickboard',
+            'class_0.75/bicycle',
+            'class_0.75/stroller',
+            'class_0.75/cart',  # class_0.75
             'val/box_loss',
             'val/obj_loss',
             'val/cls_loss',  # val loss
