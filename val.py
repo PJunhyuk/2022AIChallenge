@@ -77,7 +77,6 @@ def run(
         workers=8,  # max dataloader workers (per RANK in DDP mode)
         augment=False,  # augmented inference
         verbose=False,  # verbose output
-        save_json=False,  # save a COCO-JSON results file
         project=ROOT / 'runs/val',  # save to project/name
         name='exp',  # save to project/name
         exist_ok=False,  # existing project/name ok, do not increment
@@ -133,9 +132,8 @@ def run(
             assert ncm == nc, f'{weights[0]} ({ncm} classes) trained on different --data than what you passed ({nc} ' \
                               f'classes). Pass correct combination of --weights and --data that are trained together.'
         model.warmup(imgsz=(1 if pt else batch_size, 3, imgsz, imgsz))  # warmup
-        pad = 0.0 if task in ('speed', 'benchmark') else 0.5
-        rect = False if task == 'benchmark' else pt  # square inference for benchmarks
-        task = task if task in ('train', 'val', 'test') else 'val'  # path to train/val/test images
+        pad = 0.5
+        rect = pt  # square inference for benchmarks
         dataloader = create_dataloader(data[task],
                                        imgsz,
                                        batch_size,
@@ -157,15 +155,16 @@ def run(
     callbacks.run('on_val_start')
     pbar = tqdm(dataloader, desc=s, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
 
-    with open('/DATA/test/Test_Images_Information.json') as f:
-        json_data = json.load(f)
+    if task == 'test':
+        with open('/DATA/test/Test_Images_Information.json') as f:
+            json_data = json.load(f)
 
-        # generate images_id_name dict
-        json_images = json_data["images"]
-        images_name_id = {}
+            # generate images_id_name dict
+            json_images = json_data["images"]
+            images_name_id = {}
 
-        for image in json_images:
-            images_name_id[image['file_name'].split('.')[0]] = image['id']
+            for image in json_images:
+                images_name_id[image['file_name'].split('.')[0]] = image['id']
 
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run('on_val_batch_start')
@@ -225,7 +224,7 @@ def run(
             stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))  # (correct, conf, pcls, tcls)
 
             # Save/log
-            if save_json:
+            if task == 'test':
                 save_one_json(predn, jdict, path, class_map, images_name_id)  # append to COCO-JSON dictionary
             callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
 
@@ -267,9 +266,9 @@ def run(
         callbacks.run('on_val_end')
 
     # Save JSON
-    if save_json and len(jdict):
+    if task == 'test':
         w = Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
-        pred_json = str(save_dir / f"{w}_predictions.json")  # predictions json
+        pred_json = str(save_dir / f"{w}_preds.json")  # predictions json
 
         LOGGER.info(f'\nsaving {pred_json}...')
         with open(pred_json, 'w') as f:
@@ -298,12 +297,11 @@ def parse_opt():
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.6, help='NMS IoU threshold')
-    parser.add_argument('--task', default='val', help='train, val, test')
+    parser.add_argument('--task', default='test', help='train, val, test')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--workers', type=int, default=8, help='max dataloader workers (per RANK in DDP mode)')
     parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--verbose', action='store_true', help='report mAP by class')
-    parser.add_argument('--save-json', action='store_true', help='save a COCO-JSON results file')
     parser.add_argument('--project', default=ROOT / 'runs/val', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
     parser.add_argument('--exist-ok', action='store_true', help='existing project/name ok, do not increment')
@@ -311,7 +309,6 @@ def parse_opt():
     parser.add_argument('--dnn', action='store_true', help='use OpenCV DNN for ONNX inference')
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
-    opt.save_json |= opt.data.endswith('coco.yaml')
     print_args(vars(opt))
     return opt
 
