@@ -432,7 +432,7 @@ class LoadImagesAndLabels(Dataset):
         self.stride = stride
         self.path = path
         self.albumentations = Albumentations() if augment else None
-
+        print("argument",self.augment)
         try:
             f = []  # image files
             for p in path if isinstance(path, list) else [path]:

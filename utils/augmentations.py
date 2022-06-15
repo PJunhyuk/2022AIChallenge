@@ -45,14 +45,20 @@ class Albumentations:
 
 
 def augment_hsv(im, hgain=0.5, sgain=0.5, vgain=0.5):
+  
     # HSV color-space augmentation
     if hgain or sgain or vgain:
         r = np.random.uniform(-1, 1, 3) * [hgain, sgain, vgain] + 1  # random gains
+        
         hue, sat, val = cv2.split(cv2.cvtColor(im, cv2.COLOR_BGR2HSV))
         dtype = im.dtype  # uint8
 
         x = np.arange(0, 256, dtype=r.dtype)
+        is_hue_flip=np.random.choice(2,1)
+        if is_hue_flip[0]:
+            x=((x-61)/24) *21+94
         lut_hue = ((x * r[0]) % 180).astype(dtype)
+        
         lut_sat = np.clip(x * r[1], 0, 255).astype(dtype)
         lut_val = np.clip(x * r[2], 0, 255).astype(dtype)
 

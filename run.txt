@@ -1,0 +1,1 @@
+python train.py --batch 1 --cfg yolov5l6.yaml --weights yolov5l6.pt --hyp data/hyps/hyp.scratch-high.yaml --data dataset.yaml --img 1280 --image-weights --epoch-parts 20
