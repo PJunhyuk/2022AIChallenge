@@ -382,6 +382,7 @@ def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictio
                                            plots=False,
                                            callbacks=callbacks,
                                            compute_loss=compute_loss,
+                                           verbose=True,
                                            half=False)
 
             # Update best mAP
