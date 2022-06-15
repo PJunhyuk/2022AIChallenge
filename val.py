@@ -281,7 +281,7 @@ def run(
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
     
-    if task == 'train':
+    if training:
         return (mp, mr, map50, map75, map, *ap75.tolist(), *(loss.cpu() / len(dataloader)).tolist()), maps, t
     else:
         return (mp, mr, map50, map75, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
