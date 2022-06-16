@@ -22,7 +22,7 @@ def data_prepare(opt):
     new_dir = '../dataset'
 
     # generate raw_train.json, raw_val.json
-    generate_raw_json = True
+    generate_raw_json = False
     if generate_raw_json == True:
         print('generate raw_train.json, raw_val.json')
 
@@ -84,7 +84,7 @@ def data_prepare(opt):
 
 
     # generate dataset/train, dataset/val
-    generate_dataset = True
+    generate_dataset = False
     if generate_dataset == True:
         print('generate dataset/train, dataset/val')
 
@@ -144,7 +144,7 @@ def data_prepare(opt):
 
 
     # generate dataset/test_imgs.txt
-    generate_dataset_test_imgs = True
+    generate_dataset_test_imgs = False
     if generate_dataset_test_imgs == True:
         f_txt = open('../dataset/test_imgs.txt', 'w')
 
@@ -157,7 +157,7 @@ def data_prepare(opt):
 
 
     # generate dataset_diet/train
-    generate_dataset_diet = True
+    generate_dataset_diet = False
     if generate_dataset_diet == True:
         print('generate dataset_diet/train')
 
@@ -222,6 +222,144 @@ def data_prepare(opt):
                     img_id = images_id_name[anno["image_id"]]
                     txt_dir = new_diet_dir + '/labels/train/' + img_id.split('.')[0] + '.txt'
                     img_dir = new_diet_dir + '/images/train/' + img_id
+
+                    f_txt = open(txt_dir, 'a')
+                    img_ = Image.open(path_train_dir + '/images/' + img_id)
+                    img_size = img_.size
+                    objects_yolo = ''
+
+                    class_id = anno['category_id'] - 1
+                    img_pos = anno['bbox']
+
+                    x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+                    y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+                    xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+                    f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+                    f_txt.close()
+
+                    shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+
+    # generate dataset_capital/train
+    generate_dataset_capital = True
+    if generate_dataset_capital == True:
+        print('generate dataset_capital')
+
+        with open(path_train_dir + '/label/Train.json') as f:
+            json_data = json.load(f)
+
+            # generate images_id_name dict
+            json_images = json_data["images"]
+            images_id_name = {}
+            for image in json_images:
+                images_id_name[image['id']] = image['file_name']
+
+            # count images per class
+            print("---")
+            print("full train set")
+            count_classes = [0] * 14
+            json_anno = json_data["annotations"]
+            for anno in json_anno:
+                count_classes[anno["category_id"]-1] += 1
+            print('Count images per classes: ', count_classes)
+            print('Ratio: ', [round(100*i/sum(count_classes),4) for i in count_classes])
+            print('Total images: ', len(images_id_name))
+            print("---")
+
+            # generate image_id_capital
+            image_id_gyeonggi = []
+            image_id_sejong = []
+
+            json_anno = json_data["annotations"]
+
+            for anno in json_anno:
+                image_id = anno["image_id"]
+                image_name = images_id_name[image_id]
+                city_name = image_name.split("_")[1]
+                if city_name == "경기도":
+                    if not anno["image_id"] in image_id_gyeonggi:
+                        image_id_gyeonggi.append(anno["image_id"])
+                if city_name == "세종특별자치시":
+                    if not anno["image_id"] in image_id_sejong:
+                        image_id_sejong.append(anno["image_id"])
+            
+            print("gyeonggi imgs: ", len(image_id_gyeonggi))
+            print("sejong imgs: ", len(image_id_sejong))
+
+            random.seed(39) # 39
+
+            image_id_sejong_pick = random.sample(image_id_sejong, 974)
+            print("picked sejong imgs: ", len(image_id_sejong_pick))
+
+            image_id_capital = image_id_gyeonggi + image_id_sejong_pick
+
+            image_id_capital_train = random.sample(image_id_capital, 2000)
+            image_id_capital_val = list(set(image_id_capital) - set(image_id_capital_train))
+
+            # count images per class - train
+            print("---")
+            print("capital train")
+            count_classes_train = [0] * 14
+            for anno in json_anno:
+                if anno["image_id"] in image_id_capital_train:
+                    count_classes_train[anno["category_id"]-1] += 1
+            print('count images per classs: ', count_classes_train)
+            print('Ratio: ', [round(100*i/sum(count_classes_train),4) for i in count_classes_train])
+            print('Total images: ', len(image_id_capital_train))
+            print("---")
+
+            # count images per class - val
+            print("---")
+            print("capital val")
+            count_classes_val = [0] * 14
+            for anno in json_anno:
+                if anno["image_id"] in image_id_capital_val:
+                    count_classes_val[anno["category_id"]-1] += 1
+            print('count images per classs: ', count_classes_val)
+            print('Ratio: ', [round(100*i/sum(count_classes_val),4) for i in count_classes_val])
+            print('Total images: ', len(image_id_capital_val))
+            print("---")
+
+            # set dataset_capital
+            new_diet_dir = '../dataset_capital'
+            if os.path.exists(new_diet_dir):
+                shutil.rmtree(new_diet_dir)
+            os.makedirs(new_diet_dir + '/images/train')
+            os.makedirs(new_diet_dir + '/labels/train')
+            os.makedirs(new_diet_dir + '/images/val')
+            os.makedirs(new_diet_dir + '/labels/val')
+
+            # set images&labels in dataset_capital train
+            for anno in tqdm(json_anno):
+                if anno["image_id"] in image_id_capital_train:
+                    img_id = images_id_name[anno["image_id"]]
+                    txt_dir = new_diet_dir + '/labels/train/' + img_id.split('.')[0] + '.txt'
+                    img_dir = new_diet_dir + '/images/train/' + img_id
+
+                    f_txt = open(txt_dir, 'a')
+                    img_ = Image.open(path_train_dir + '/images/' + img_id)
+                    img_size = img_.size
+                    objects_yolo = ''
+
+                    class_id = anno['category_id'] - 1
+                    img_pos = anno['bbox']
+
+                    x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+                    y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+                    xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+                    f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+                    f_txt.close()
+
+                    shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+            # set images&labels in dataset_capital val
+            for anno in tqdm(json_anno):
+                if anno["image_id"] in image_id_capital_val:
+                    img_id = images_id_name[anno["image_id"]]
+                    txt_dir = new_diet_dir + '/labels/val/' + img_id.split('.')[0] + '.txt'
+                    img_dir = new_diet_dir + '/images/val/' + img_id
 
                     f_txt = open(txt_dir, 'a')
                     img_ = Image.open(path_train_dir + '/images/' + img_id)
