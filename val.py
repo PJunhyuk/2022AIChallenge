@@ -35,7 +35,7 @@ def save_one_json(predn, jdict, path, class_map, images_name_id):
             'image_id': images_name_id[image_id],
             'category_id': class_map[int(p[5])]+1,
             'bbox': [round(x, 1) for x in b],
-            'score': round(p[4], 5),
+            'score': round(p[4], 4),
             'segmentation': []})
 
 
@@ -76,7 +76,6 @@ def run(
         device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         workers=8,  # max dataloader workers (per RANK in DDP mode)
         augment=False,  # augmented inference
-        verbose=False,  # verbose output
         project=ROOT / 'runs/val',  # save to project/name
         name='exp',  # save to project/name
         half=True,  # use FP16 half-precision inference
@@ -248,7 +247,7 @@ def run(
     LOGGER.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map75, map))
 
     # Print results per class
-    if (verbose or (nc < 50 and not training)) and nc > 1 and len(stats):
+    if (nc < 50 and not training) and nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
             LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap75[i], ap[i]))
 
@@ -289,22 +288,25 @@ def run(
 
 def parse_opt():
     parser = argparse.ArgumentParser()
+
     parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model.pt path(s)')
     parser.add_argument('--batch-size', type=int, default=32, help='batch size')
-    parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.001, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.6, help='NMS IoU threshold')
-    parser.add_argument('--task', default='test', help='train, val, test')
-    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
-    parser.add_argument('--workers', type=int, default=8, help='max dataloader workers (per RANK in DDP mode)')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
-    parser.add_argument('--verbose', action='store_true', help='report mAP by class')
+
+    parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=1536, help='inference size (pixels)')
     parser.add_argument('--project', default=ROOT / 'runs/val', help='save to project/name')
     parser.add_argument('--name', default='exp', help='save to project/name')
+    parser.add_argument('--task', default='test', help='train, val, test')
+    parser.add_argument('--workers', type=int, default=8, help='max dataloader workers (per RANK in DDP mode)')
+    parser.add_argument('--augment', action='store_true', help='augmented inference')
+    parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
+
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
+    opt.augment = True
     print_args(vars(opt))
     return opt
 
