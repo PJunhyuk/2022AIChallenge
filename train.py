@@ -17,6 +17,12 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import SGD, Adam, AdamW, lr_scheduler
 from tqdm import tqdm
 
+# for data_prepare
+import json
+import shutil
+from PIL import Image
+from utils.general import xyxy2xywh
+
 FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
@@ -44,6 +50,139 @@ from utils.torch_utils import EarlyStopping, ModelEMA, de_parallel, select_devic
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
 RANK = int(os.getenv('RANK', -1))
 WORLD_SIZE = int(os.getenv('WORLD_SIZE', 1))
+
+
+def data_prepare(path_DATA_dir, data_seed=100):
+
+    print('data preparing')
+
+    random.seed(data_seed)
+
+    path_train_dir = path_DATA_dir + '/train'
+    path_test_dir = path_DATA_dir + '/test'
+    new_dir = '../dataset'
+
+
+    # generate raw_train.json, raw_val.json
+    print('generate raw_train.json, raw_val.json')
+
+    if os.path.exists(new_dir):
+        shutil.rmtree(new_dir)
+    os.makedirs(new_dir + '/images/train')
+    os.makedirs(new_dir + '/images/val')
+    os.makedirs(new_dir + '/labels/train')
+    os.makedirs(new_dir + '/labels/val')
+
+    with open(path_train_dir + '/label/Train.json') as f:
+        json_data = json.load(f)
+
+        # generate images_id_name dict
+        json_images = json_data["images"]
+        images_id_name = {}
+
+        for image in json_images:
+            images_id_name[image['id']] = image['file_name']
+
+        ## 21650 + 3000
+        trainval_id = images_id_name.keys() # 24650
+        val_id = random.sample(trainval_id, 3000)
+        train_id = list(set(trainval_id) - set(val_id)) # 24650-3000 = 21650
+
+        json_anno = json_data["annotations"]
+
+        json_anno_val = []
+        json_anno_train = []
+
+        for json_img in tqdm(json_anno):
+            image_id = json_img["image_id"]
+            json_img["file_name"] = images_id_name[image_id]
+
+            if image_id in val_id:
+                json_anno_val.append(json_img)
+            elif image_id in train_id:
+                json_anno_train.append(json_img)
+
+        json_data_val = {}
+        json_data_val['annotations'] = json_anno_val
+        json_data_train = {}
+        json_data_train['annotations'] = json_anno_train
+
+        if os.path.isfile(new_dir + '/raw_val.json'):
+            os.remove(new_dir + '/raw_val.json')
+        if os.path.isfile(new_dir + '/raw_train.json'):
+            os.remove(new_dir + '/raw_train.json')
+
+        with open(new_dir + '/raw_val.json', 'w') as f_val:
+            json.dump(json_data_val, f_val)
+        with open(new_dir + '/raw_train.json', 'w') as f_train:
+            json.dump(json_data_train, f_train)
+
+
+    # generate dataset/train, dataset/val
+    print('generate dataset/train, dataset/val')
+
+    with open(new_dir + '/raw_val.json') as f:
+        json_data = json.load(f)
+
+        json_anno = json_data["annotations"]
+
+        for json_img in tqdm(json_anno):
+            img_id = json_img['file_name']
+            txt_dir = new_dir + '/labels/val/' + img_id.split('.')[0] + '.txt'
+            img_dir = new_dir + '/images/val/' + img_id
+
+            f_txt = open(txt_dir, 'a')
+            img_ = Image.open(path_train_dir + '/images/' + img_id)
+            img_size = img_.size
+
+            class_id = json_img['category_id'] - 1
+            img_pos = json_img['bbox'] # xywh
+
+            x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+            y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+            xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+            f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+            f_txt.close()
+
+            shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+    with open(new_dir + '/raw_train.json') as f:
+        json_data = json.load(f)
+        json_anno = json_data["annotations"]
+
+        for json_img in tqdm(json_anno):
+            img_id = json_img['file_name']
+            txt_dir = new_dir + '/labels/train/' + img_id.split('.')[0] + '.txt'
+            img_dir = new_dir + '/images/train/' + img_id
+
+            f_txt = open(txt_dir, 'a')
+            img_ = Image.open(path_train_dir + '/images/' + img_id)
+            img_size = img_.size
+            objects_yolo = ''
+
+            class_id = json_img['category_id'] - 1
+            img_pos = json_img['bbox']
+
+            x_center = (img_pos[0] + img_pos[2] / 2) / img_size[0]
+            y_center = (img_pos[1] + img_pos[3] / 2) / img_size[1]
+            xywh = np.array([x_center,y_center,img_pos[2]/img_size[0],img_pos[3]/img_size[1]])
+            f_txt.write(f"{class_id} {xywh[0]:.5f} {xywh[1]:.5f} {xywh[2]:.5f} {xywh[3]:.5f}\n")  # write label
+
+            f_txt.close()
+
+            shutil.copy(path_train_dir + '/images/' + img_id, img_dir)
+
+
+    # generate dataset/test_imgs.txt
+    f_txt = open(new_dir + '/test_imgs.txt', 'w')
+
+    with open(path_test_dir + '/Test_Images_Information.json') as f:
+        json_data = json.load(f)
+
+        for image in tqdm(json_data["images"]):
+            image_path = path_test_dir + "/images/" + image["file_name"]
+            f_txt.write(f"{image_path}\n")
 
 
 def train(hyp, opt, device, callbacks):  # hyp is path/to/hyp.yaml or hyp dictionary
@@ -487,6 +626,9 @@ def parse_opt(known=False):
     parser.add_argument('--epoch-parts', type=int, default=1, help='')
     parser.add_argument('--val-period', type=int, default=1, help='')
 
+    parser.add_argument('--no-data-prepare', action='store_true', help='skip dataset prepare step')
+    parser.add_argument('--path_DATA_dir', type=str, default='/DATA', help='path to DATA')
+
     opt = parser.parse_known_args()[0] if known else parser.parse_args()
     return opt
 
@@ -543,5 +685,11 @@ def run(**kwargs):
 
 
 if __name__ == "__main__":
+
     opt = parse_opt()
+
+    # dataset preparing
+    if not opt.no_data_prepare:
+        data_prepare(opt.path_DATA_dir)
+
     main(opt)
