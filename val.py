@@ -85,6 +85,7 @@ def run(
         plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
+        no_conf_cut=False,
 ):
     # Initialize/load model and set device
     training = model is not None
@@ -271,6 +272,58 @@ def run(
         with open(pred_json, 'w') as f:
             json.dump(jdict, f)
 
+        # conf_cut
+        if not no_conf_cut:
+            conf_thres_try = conf_thres
+            pred_json_cut = str(save_dir / f"{w}_preds_cut.json")
+
+            # checking.. 0.01
+            while True:
+                print('checking conf_thres ', conf_thres_try)
+
+                if os.path.exists(pred_json_cut):
+                    os.remove(pred_json_cut)
+
+                jdict_cut = []
+                for det in jdict:
+                    if det['score'] >= conf_thres_try:
+                        jdict_cut.append(det)
+                
+                with open(pred_json_cut, 'w') as f:
+                    json.dump(jdict_cut, f)
+                
+                json_size = os.path.getsize(pred_json_cut) / (1000.0 * 1000.0)
+                print('json_size ', json_size)
+                if json_size < 20:
+                    break
+                
+                conf_thres_try = round(conf_thres_try + 0.01, 3)
+            
+            conf_thres_try = round(conf_thres_try - 0.01, 3)
+
+            # checking.. 0.001
+            while True:
+                print('checking conf_thres ', conf_thres_try)
+
+                if os.path.exists(pred_json_cut):
+                    os.remove(pred_json_cut)
+
+                jdict_cut = []
+                for det in jdict:
+                    if det['score'] >= conf_thres_try:
+                        jdict_cut.append(det)
+                
+                with open(pred_json_cut, 'w') as f:
+                    json.dump(jdict_cut, f)
+                
+                json_size = os.path.getsize(pred_json_cut) / (1000.0 * 1000.0)
+                print('json_size ', json_size)
+                if json_size < 20:
+                    break
+                
+                conf_thres_try = round(conf_thres_try + 0.001, 3)
+        
+
     # Return results
     model.float()  # for training
     if not training:
@@ -289,11 +342,11 @@ def run(
 def parse_opt():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data', type=str, default=ROOT / 'data/coco128.yaml', help='dataset.yaml path')
+    parser.add_argument('--data', type=str, default='data/dataset.yaml', help='dataset.yaml path')
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model.pt path(s)')
-    parser.add_argument('--batch-size', type=int, default=32, help='batch size')
-    parser.add_argument('--conf-thres', type=float, default=0.001, help='confidence threshold')
-    parser.add_argument('--iou-thres', type=float, default=0.6, help='NMS IoU threshold')
+    parser.add_argument('--batch-size', type=int, default=16, help='batch size')
+    parser.add_argument('--conf-thres', type=float, default=0.01, help='confidence threshold')
+    parser.add_argument('--iou-thres', type=float, default=0.7, help='NMS IoU threshold')
 
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=1536, help='inference size (pixels)')
     parser.add_argument('--project', default=ROOT / 'runs/val', help='save to project/name')
@@ -303,6 +356,8 @@ def parse_opt():
     parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
+
+    parser.add_argument('--no-conf-cut', action='store_true')
 
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
