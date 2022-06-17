@@ -43,11 +43,6 @@ def data_prepare(opt):
             for image in json_images:
                 images_id_name[image['id']] = image['file_name']
 
-            ## 700 + 300
-            # trainval_id = random.sample(images_id_name.keys(), 1000)
-            # val_id = random.sample(trainval_id, 300)
-            # train_id = list(set(trainval_id) - set(val_id)) # 700
-
             ## 21650 + 3000
             trainval_id = images_id_name.keys() # 24650
             val_id = random.sample(trainval_id, 3000)
