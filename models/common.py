@@ -35,6 +35,23 @@ def autopad(k, p=None):  # kernel, padding
     return p
 
 
+def export_formats():
+    # YOLOv5 export formats
+    x = [
+        ['PyTorch', '-', '.pt', True],
+        ['TorchScript', 'torchscript', '.torchscript', True],
+        ['ONNX', 'onnx', '.onnx', True],
+        ['OpenVINO', 'openvino', '_openvino_model', False],
+        ['TensorRT', 'engine', '.engine', True],
+        ['CoreML', 'coreml', '.mlmodel', False],
+        ['TensorFlow SavedModel', 'saved_model', '_saved_model', True],
+        ['TensorFlow GraphDef', 'pb', '.pb', True],
+        ['TensorFlow Lite', 'tflite', '.tflite', False],
+        ['TensorFlow Edge TPU', 'edgetpu', '_edgetpu.tflite', False],
+        ['TensorFlow.js', 'tfjs', '_web_model', False],]
+    return pd.DataFrame(x, columns=['Format', 'Argument', 'Suffix', 'GPU'])
+
+
 class Conv(nn.Module):
     # Standard convolution
     def __init__(self, c1, c2, k=1, s=1, p=None, g=1, act=True):  # ch_in, ch_out, kernel, stride, padding, groups
@@ -507,7 +524,6 @@ class DetectMultiBackend(nn.Module):
     @staticmethod
     def model_type(p='path/to/model.pt'):
         # Return model type from model path, i.e. path='path/to/model.onnx' -> type=onnx
-        from export import export_formats
         suffixes = list(export_formats().Suffix) + ['.xml']  # export suffixes
         check_suffix(p, suffixes)  # checks
         p = Path(p).name  # eliminate trailing separators
