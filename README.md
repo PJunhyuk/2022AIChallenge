@@ -1,5 +1,11 @@
 # 2022AIChallenge
 
+본 repo는 2022 인공지능 온라인 경진대회 중 *주차 관련 이동체 객체 검출 문제* 태스크 수행을 위한 레포지토리입니다.  
+
+repo를 작성한 [주식회사 메이아이](https://may-i.io/)는 본 대회의 2021년 이미지 분야 1위, 2020년 4번 과제 1위를 달성한 팀이기도 합니다:)  
+
+- - -
+
 ## 셋업
 
 학습 및 추론을 위한 환경을 구축하는 단계입니다.  
@@ -36,31 +42,44 @@ $ sudo systemctl restart docker
 
 #### 과제 데이터 다운로드 및 셋업
 
-제공된 데이터는 다음과 같은 경로로 셋업되어야 합니다.  
+제공된 데이터는 다음과 같은 형태로 준비되어있음을 전제합니다.
+
+```
+/DATA
+  /train.zip
+  /test
+    /test.zip
+    /Test_Images_Information.json
+  /baseline.zip
+  /sample_submission.json
+```
+
+아래 코드로 `/DATA` 디렉토리를 세팅합니다.
+
+```bash
+$ sudo mkdir -p /DATA/train
+$ sudo unzip /DATA/train.zip -d /DATA/train
+
+$ sudo unzip /DATA/test/test.zip -d /DATA/test
+```
+
+세팅 후에는 다음과 같은 형태로 `/DATA` 디렉토리가 세팅됩니다. (사용하지 않는 파일들은 생략했습니다)
 
 ```
 /DATA
   /train
     /images
+      /20201102_경기도_-_-_맑음_주간_실외_right_000079_0088055.png
+      ...
     /labels
   /test
     /images
+      /0dbc1884-9895-4294-91ef-77626a5ca826.png
+      ...
     Test_Images_Information.json
 ```
 
-위와 같이 셋업되어 있지 않은 경우, 제시된 데이터 파일을 다운로드 받아 다음의 코드로 세팅합니다.
-
-```bash
-$ sudo mkdir -p /DATA/train
-$ sudo unzip train.zip -d /DATA/train
-$ sudo rm train.zip
-
-$ sudo mkdir -p /DATA/test
-$ sudo unzip test.zip -d /DATA/test
-$ sudo rm test.zip
-
-$ sudo mv Test_Images_Information.json /DATA/test
-```
+이후의 절차는 `/DATA/` 디렉토리가 위와 같이 세팅되어 있음을 전제합니다.  
 
 ### 작업 폴더 세팅
 
