@@ -80,7 +80,6 @@ def run(
         model=None,
         dataloader=None,
         save_dir=Path(''),
-        plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
 ):
@@ -107,7 +106,6 @@ def run(
 
     # Data
     data = check_dataset(data)  # check
-
 
     # Configure
     model.eval()
@@ -205,49 +203,13 @@ def run(
                 scale_coords(im[si].shape[1:], tbox, shape, shapes[si][1])  # native-space labels
                 labelsn = torch.cat((labels[:, 0:1], tbox), 1)  # native-space labels
                 correct = process_batch(predn, labelsn, iouv)
-                if plots:
-                    confusion_matrix.process_batch(predn, labelsn)
             stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))  # (correct, conf, pcls, tcls)
 
             # Save/log
             save_one_json(predn, jdict, path, class_map, images_name_id)  # append to COCO-JSON dictionary
             callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
 
-        # Plot images
-        if plots and batch_i < 3:
-            plot_images(im, targets, paths, save_dir / f'val_batch{batch_i}_labels.jpg', names)  # labels
-            plot_images(im, output_to_target(out), paths, save_dir / f'val_batch{batch_i}_pred.jpg', names)  # pred
-
         callbacks.run('on_val_batch_end')
-
-    # Compute metrics
-    stats = [torch.cat(x, 0).cpu().numpy() for x in zip(*stats)]  # to numpy
-    if len(stats) and stats[0].any():
-        tp, fp, p, r, f1, ap, ap_class = ap_per_class(*stats, plot=plots, save_dir=save_dir, names=names)
-        ap50, ap75, ap = ap[:, 0], ap[:, 5], ap.mean(1)  # AP@.5, AP@0.75, AP@0.5:0.95
-        mp, mr, map50, map75, map = p.mean(), r.mean(), ap50.mean(), ap75.mean(), ap.mean()
-        nt = np.bincount(stats[3].astype(int), minlength=nc)  # number of targets per class
-    else:
-        nt = torch.zeros(1)
-
-    # Print results
-    pf = '%20s' + '%11i' * 2 + '%11.3g' * 5  # print format
-    LOGGER.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map75, map))
-
-    # Print results per class
-    if (nc < 50) and nc > 1 and len(stats):
-        for i, c in enumerate(ap_class):
-            LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap75[i], ap[i]))
-
-    # Print speeds
-    t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
-    shape = (batch_size, 3, imgsz, imgsz)
-    LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}' % t)
-
-    # Plots
-    if plots:
-        confusion_matrix.plot(save_dir=save_dir, names=list(names.values()))
-        callbacks.run('on_val_end')
 
     # Save JSON
     w = Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
@@ -263,7 +225,7 @@ def run(
 
     # checking.. 0.01
     while True:
-        print('checking conf_thres ', conf_thres_try)
+        print('checking conf_thres ', conf_thres_try, end=' - ')
 
         if os.path.exists(pred_json_cut):
             os.remove(pred_json_cut)
@@ -287,7 +249,7 @@ def run(
 
     # checking.. 0.001
     while True:
-        print('checking conf_thres ', conf_thres_try)
+        print('checking conf_thres ', conf_thres_try, end=' - ')
 
         if os.path.exists(pred_json_cut):
             os.remove(pred_json_cut)
@@ -306,8 +268,8 @@ def run(
             break
         
         conf_thres_try = round(conf_thres_try + 0.001, 3)
-    
-    LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
+
+    print('')
 
 
 def parse_opt():
