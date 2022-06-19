@@ -72,10 +72,8 @@ def run(
         imgsz=640,  # inference size (pixels)
         conf_thres=0.001,  # confidence threshold
         iou_thres=0.6,  # NMS IoU threshold
-        task='val',  # train, val, test, speed or study
         device='',  # cuda device, i.e. 0 or 0,1,2,3 or cpu
         workers=8,  # max dataloader workers (per RANK in DDP mode)
-        augment=False,  # augmented inference
         project=ROOT / 'runs/val',  # save to project/name
         name='exp',  # save to project/name
         half=True,  # use FP16 half-precision inference
@@ -85,36 +83,31 @@ def run(
         plots=True,
         callbacks=Callbacks(),
         compute_loss=None,
-        no_conf_cut=False,
 ):
+
     # Initialize/load model and set device
-    training = model is not None
-    if training:  # called by train.py
-        device, pt, jit, engine = next(model.parameters()).device, True, False, False  # get model device, PyTorch model
-        half &= device.type != 'cpu'  # half precision only supported on CUDA
-        model.half() if half else model.float()
-    else:  # called directly
-        device = select_device(device, batch_size=batch_size)
+    device = select_device(device, batch_size=batch_size)
 
-        # Directories
-        save_dir = increment_path(Path(project) / name, exist_ok=False)  # increment run
-        save_dir.mkdir(parents=True, exist_ok=True)  # make dir
+    # Directories
+    save_dir = increment_path(Path(project) / name, exist_ok=False)  # increment run
+    save_dir.mkdir(parents=True, exist_ok=True)  # make dir
 
-        # Load model
-        model = DetectMultiBackend(weights, device=device, dnn=False, data=data, fp16=half)
-        stride, pt, jit, engine = model.stride, model.pt, model.jit, model.engine
-        imgsz = check_img_size(imgsz, s=stride)  # check image size
-        half = model.fp16  # FP16 supported on limited backends with CUDA
-        if engine:
-            batch_size = model.batch_size
-        else:
-            device = model.device
-            if not (pt or jit):
-                batch_size = 1  # export.py models default to batch-size 1
-                LOGGER.info(f'Forcing --batch-size 1 square inference (1,3,{imgsz},{imgsz}) for non-PyTorch models')
+    # Load model
+    model = DetectMultiBackend(weights, device=device, dnn=False, data=data, fp16=half)
+    stride, pt, jit, engine = model.stride, model.pt, model.jit, model.engine
+    imgsz = check_img_size(imgsz, s=stride)  # check image size
+    half = model.fp16  # FP16 supported on limited backends with CUDA
+    if engine:
+        batch_size = model.batch_size
+    else:
+        device = model.device
+        if not (pt or jit):
+            batch_size = 1  # export.py models default to batch-size 1
+            LOGGER.info(f'Forcing --batch-size 1 square inference (1,3,{imgsz},{imgsz}) for non-PyTorch models')
 
-        # Data
-        data = check_dataset(data)  # check
+    # Data
+    data = check_dataset(data)  # check
+
 
     # Configure
     model.eval()
@@ -124,23 +117,22 @@ def run(
     niou = iouv.numel()
 
     # Dataloader
-    if not training:
-        if pt:  # check --weights are trained on --data
-            ncm = model.model.nc
-            assert ncm == nc, f'{weights[0]} ({ncm} classes) trained on different --data than what you passed ({nc} ' \
-                              f'classes). Pass correct combination of --weights and --data that are trained together.'
-        model.warmup(imgsz=(1 if pt else batch_size, 3, imgsz, imgsz))  # warmup
-        pad = 0.5
-        rect = pt  # square inference for benchmarks
-        dataloader = create_dataloader(data[task],
-                                       imgsz,
-                                       batch_size,
-                                       stride,
-                                       pad=pad,
-                                       rect=rect,
-                                       workers=workers,
-                                       prefix=colorstr(f'{task}: '),
-                                       task=task)[0]
+    if pt:  # check --weights are trained on --data
+        ncm = model.model.nc
+        assert ncm == nc, f'{weights[0]} ({ncm} classes) trained on different --data than what you passed ({nc} ' \
+                            f'classes). Pass correct combination of --weights and --data that are trained together.'
+    model.warmup(imgsz=(1 if pt else batch_size, 3, imgsz, imgsz))  # warmup
+    pad = 0.5
+    rect = pt  # square inference for benchmarks
+    dataloader = create_dataloader(data['test'],
+                                    imgsz,
+                                    batch_size,
+                                    stride,
+                                    pad=pad,
+                                    rect=rect,
+                                    workers=workers,
+                                    prefix=colorstr(f'{"test"}: '),
+                                    task='test')[0]
 
     seen = 0
     confusion_matrix = ConfusionMatrix(nc=nc)
@@ -153,16 +145,15 @@ def run(
     callbacks.run('on_val_start')
     pbar = tqdm(dataloader, desc=s, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
 
-    if task == 'test':
-        with open('/DATA/test/Test_Images_Information.json') as f:
-            json_data = json.load(f)
+    with open('/DATA/test/Test_Images_Information.json') as f:
+        json_data = json.load(f)
 
-            # generate images_id_name dict
-            json_images = json_data["images"]
-            images_name_id = {}
+        # generate images_id_name dict
+        json_images = json_data["images"]
+        images_name_id = {}
 
-            for image in json_images:
-                images_name_id[image['file_name'].split('.')[0]] = image['id']
+        for image in json_images:
+            images_name_id[image['file_name'].split('.')[0]] = image['id']
 
     for batch_i, (im, targets, paths, shapes) in enumerate(pbar):
         callbacks.run('on_val_batch_start')
@@ -177,7 +168,7 @@ def run(
         dt[0] += t2 - t1
 
         # Inference
-        out, train_out = model(im) if training else model(im, augment=augment, val=True)  # inference, loss outputs
+        out, train_out = model(im, augment=True, val=True)  # inference, loss outputs
         dt[1] += time_sync() - t2
 
         # Loss
@@ -188,10 +179,7 @@ def run(
         targets[:, 2:] *= torch.tensor((width, height, width, height), device=device)  # to pixels
         lb = []  # for autolabelling
         t3 = time_sync()
-        if task == 'test':
-            out = non_max_suppression(out, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=False, max_det=50)
-        else:
-            out = non_max_suppression(out, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=False)
+        out = non_max_suppression(out, conf_thres, iou_thres, labels=lb, multi_label=True, agnostic=False, max_det=50)
         dt[2] += time_sync() - t3
 
         # Metrics
@@ -222,8 +210,7 @@ def run(
             stats.append((correct, pred[:, 4], pred[:, 5], labels[:, 0]))  # (correct, conf, pcls, tcls)
 
             # Save/log
-            if task == 'test':
-                save_one_json(predn, jdict, path, class_map, images_name_id)  # append to COCO-JSON dictionary
+            save_one_json(predn, jdict, path, class_map, images_name_id)  # append to COCO-JSON dictionary
             callbacks.run('on_val_image_end', pred, predn, path, names, im[si])
 
         # Plot images
@@ -248,15 +235,14 @@ def run(
     LOGGER.info(pf % ('all', seen, nt.sum(), mp, mr, map50, map75, map))
 
     # Print results per class
-    if (nc < 50 and not training) and nc > 1 and len(stats):
+    if (nc < 50) and nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
             LOGGER.info(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap75[i], ap[i]))
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in dt)  # speeds per image
-    if not training:
-        shape = (batch_size, 3, imgsz, imgsz)
-        LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}' % t)
+    shape = (batch_size, 3, imgsz, imgsz)
+    LOGGER.info(f'Speed: %.1fms pre-process, %.1fms inference, %.1fms NMS per image at shape {shape}' % t)
 
     # Plots
     if plots:
@@ -264,111 +250,89 @@ def run(
         callbacks.run('on_val_end')
 
     # Save JSON
-    if task == 'test':
-        w = Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
-        pred_json = str(save_dir / f"{w}_preds.json")  # predictions json
+    w = Path(weights[0] if isinstance(weights, list) else weights).stem if weights is not None else ''  # weights
+    pred_json = str(save_dir / f"{w}_preds.json")  # predictions json
 
-        LOGGER.info(f'\nsaving {pred_json}...')
-        with open(pred_json, 'w') as f:
-            json.dump(jdict, f)
+    LOGGER.info(f'\nsaving {pred_json}...')
+    with open(pred_json, 'w') as f:
+        json.dump(jdict, f)
 
-        # conf_cut
-        if not no_conf_cut:
-            conf_thres_try = conf_thres
-            pred_json_cut = str(save_dir / f"{w}_preds_cut.json")
+    # conf_cut
+    conf_thres_try = conf_thres
+    pred_json_cut = str(save_dir / f"{w}_preds_cut.json")
 
-            # checking.. 0.01
-            while True:
-                print('checking conf_thres ', conf_thres_try)
+    # checking.. 0.01
+    while True:
+        print('checking conf_thres ', conf_thres_try)
 
-                if os.path.exists(pred_json_cut):
-                    os.remove(pred_json_cut)
+        if os.path.exists(pred_json_cut):
+            os.remove(pred_json_cut)
 
-                jdict_cut = []
-                for det in jdict:
-                    if det['score'] >= conf_thres_try:
-                        jdict_cut.append(det)
-                
-                with open(pred_json_cut, 'w') as f:
-                    json.dump(jdict_cut, f)
-                
-                json_size = os.path.getsize(pred_json_cut) / (1000.0 * 1000.0)
-                print('json_size ', json_size)
-                if json_size < 20:
-                    break
-                
-                conf_thres_try = round(conf_thres_try + 0.01, 3)
-            
-            conf_thres_try = round(conf_thres_try - 0.01, 3)
-
-            # checking.. 0.001
-            while True:
-                print('checking conf_thres ', conf_thres_try)
-
-                if os.path.exists(pred_json_cut):
-                    os.remove(pred_json_cut)
-
-                jdict_cut = []
-                for det in jdict:
-                    if det['score'] >= conf_thres_try:
-                        jdict_cut.append(det)
-                
-                with open(pred_json_cut, 'w') as f:
-                    json.dump(jdict_cut, f)
-                
-                json_size = os.path.getsize(pred_json_cut) / (1000.0 * 1000.0)
-                print('json_size ', json_size)
-                if json_size < 20:
-                    break
-                
-                conf_thres_try = round(conf_thres_try + 0.001, 3)
+        jdict_cut = []
+        for det in jdict:
+            if det['score'] >= conf_thres_try:
+                jdict_cut.append(det)
         
-
-    # Return results
-    model.float()  # for training
-    if not training:
-        s = ''
-        LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
-    maps = np.zeros(nc) + map
-    for i, c in enumerate(ap_class):
-        maps[c] = ap[i]
+        with open(pred_json_cut, 'w') as f:
+            json.dump(jdict_cut, f)
+        
+        json_size = os.path.getsize(pred_json_cut) / (1000.0 * 1000.0)
+        print('json_size ', json_size)
+        if json_size < 20:
+            break
+        
+        conf_thres_try = round(conf_thres_try + 0.01, 3)
     
-    if training:
-        return (mp, mr, map50, map75, map, *ap75.tolist(), *(loss.cpu() / len(dataloader)).tolist()), maps, t
-    else:
-        return (mp, mr, map50, map75, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    conf_thres_try = round(conf_thres_try - 0.01, 3)
+
+    # checking.. 0.001
+    while True:
+        print('checking conf_thres ', conf_thres_try)
+
+        if os.path.exists(pred_json_cut):
+            os.remove(pred_json_cut)
+
+        jdict_cut = []
+        for det in jdict:
+            if det['score'] >= conf_thres_try:
+                jdict_cut.append(det)
+        
+        with open(pred_json_cut, 'w') as f:
+            json.dump(jdict_cut, f)
+        
+        json_size = os.path.getsize(pred_json_cut) / (1000.0 * 1000.0)
+        print('json_size ', json_size)
+        if json_size < 20:
+            break
+        
+        conf_thres_try = round(conf_thres_try + 0.001, 3)
+    
+    LOGGER.info(f"Results saved to {colorstr('bold', save_dir)}{s}")
 
 
 def parse_opt():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data', type=str, default='data/dataset.yaml', help='dataset.yaml path')
     parser.add_argument('--weights', nargs='+', type=str, default=ROOT / 'yolov5s.pt', help='model.pt path(s)')
+
+    parser.add_argument('--data', type=str, default='data/dataset.yaml', help='dataset.yaml path')
     parser.add_argument('--batch-size', type=int, default=16, help='batch size')
     parser.add_argument('--conf-thres', type=float, default=0.01, help='confidence threshold')
     parser.add_argument('--iou-thres', type=float, default=0.7, help='NMS IoU threshold')
-
     parser.add_argument('--imgsz', '--img', '--img-size', type=int, default=1536, help='inference size (pixels)')
     parser.add_argument('--project', default=ROOT / 'runs/val', help='save to project/name')
-    parser.add_argument('--name', default='exp', help='save to project/name')
-    parser.add_argument('--task', default='test', help='train, val, test')
+    parser.add_argument('--name', default='final', help='save to project/name')
     parser.add_argument('--workers', type=int, default=8, help='max dataloader workers (per RANK in DDP mode)')
-    parser.add_argument('--augment', action='store_true', help='augmented inference')
     parser.add_argument('--device', default='', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--half', action='store_true', help='use FP16 half-precision inference')
 
-    parser.add_argument('--no-conf-cut', action='store_true')
-
     opt = parser.parse_args()
     opt.data = check_yaml(opt.data)  # check YAML
-    opt.augment = True
     print_args(vars(opt))
     return opt
 
 
 def main(opt):
-    if opt.conf_thres > 0.001:  # https://github.com/ultralytics/yolov5/issues/1466
-        LOGGER.info(emojis(f'WARNING: confidence threshold {opt.conf_thres} > 0.001 produces invalid results ⚠️'))
     run(**vars(opt))
 
 
