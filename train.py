@@ -177,7 +177,7 @@ def data_prepare(path_DATA_dir, data_seed=100):
     # generate dataset/test_imgs.txt
     f_txt = open(new_dir + '/test_imgs.txt', 'w')
 
-    with open(path_test_dir + '/Test_Images_Information.json') as f:
+    with open(path_DATA_dir + '/Test_Images_Information.json') as f:
         json_data = json.load(f)
 
         for image in tqdm(json_data["images"]):
