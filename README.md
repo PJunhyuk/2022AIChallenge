@@ -1,8 +1,6 @@
 # 2022AIChallenge
 
-본 repo는 2022 인공지능 온라인 경진대회 중 *주차 관련 이동체 객체 검출 문제* 태스크 수행을 위한 레포지토리입니다.  
-
-repo를 작성한 [주식회사 메이아이](https://may-i.io/)는 본 대회의 2021년 이미지 분야 1위, 2020년 4번 과제 1위를 달성한 팀이기도 합니다:)  
+본 repo는 *마이애미* 팀의 2022 인공지능 온라인 경진대회 중 *주차 관련 이동체 객체 검출 문제* 태스크 수행을 위한 레포지토리입니다.  
 
 - - -
 
@@ -12,7 +10,8 @@ repo를 작성한 [주식회사 메이아이](https://may-i.io/)는 본 대회�
 
 ### 별도 셋업
 
-별도의 환경을 위한 셋업 과정입니다. docker 가 설치되어 있고, dataset 이 알맞은 경로에 준비되어 있다면 생략할 수 있습니다.  
+별도의 환경을 위한 셋업 과정입니다. 재현성 검증 서버에서는 가상환경 설정 없이 직접 라이브러리를 설치하여 사용하기 때문에 본 과정은 생략합니다.  
+다른 서버라도 docker 가 설치되어 있고, dataset 이 알맞은 경로에 준비되어 있다면 생략할 수 있습니다.  
 
 #### docker 설치
 
@@ -40,62 +39,9 @@ $ sudo systemctl restart docker
 
 도중에 `sudo: unable to resolve host` 에러가 나오면 [링크](https://extrememanual.net/33739) 로 해결하면 됩니다.
 
-#### 과제 데이터 다운로드 및 셋업
+#### docker 및 git, ffmpeg (for opencv) 세팅
 
-제공된 데이터는 다음과 같은 형태로 준비되어있음을 전제합니다.
-
-```
-/DATA
-  /train.zip
-  /test
-    /test.zip
-    /Test_Images_Information.json
-  /baseline.zip
-  /sample_submission.json
-```
-
-아래 코드로 `/DATA` 디렉토리를 세팅합니다.
-
-```bash
-$ sudo mkdir -p /DATA/train
-$ sudo unzip /DATA/train.zip -d /DATA/train
-
-$ sudo unzip /DATA/test/test.zip -d /DATA/test
-```
-
-세팅 후에는 다음과 같은 형태로 `/DATA` 디렉토리가 세팅됩니다. (사용하지 않는 파일들은 생략했습니다)
-
-```
-/DATA
-  /train
-    /images
-      /20201102_경기도_-_-_맑음_주간_실외_right_000079_0088055.png
-      ...
-    /labels
-  /test
-    /images
-      /0dbc1884-9895-4294-91ef-77626a5ca826.png
-      ...
-    Test_Images_Information.json
-```
-
-이후의 절차는 `/DATA/` 디렉토리가 위와 같이 세팅되어 있음을 전제합니다.  
-
-### 작업 폴더 세팅
-
-작업 폴더를 세팅하기 위해 제출한 코드를 `~/workspace/code/2022AIChallenge` 에 세팅합니다.  
-혹은 다음과 같이 `git` 에서 가져옵니다.  
-
-```bash
-$ mkdir -p ~/workspace/code
-(~/workspace/code) $ git clone https://github.com/PJunhyuk/2022AIChallenge
-```
-
-** 이후의 모든 코드는 특별한 언급이 없다면 current work directory(`~/workspace/code/2022AIChallenge`) 하에서의 실행을 전제합니다.  
-
-### docker 및 git, ffmpeg (for opencv) 세팅
-
-여러 docker image 중 `nvidia/pytorch` 의 기본 이미지를 활용하였습니다. 다음과 같은 방식으로 docker 를 가져오고, 기본 package 인 git 과 ffmpeg 를 설치합니다.  
+여러 docker image 중 `nvidia/pytorch` 의 기본 이미지를 활용합니다. 다음과 같은 방식으로 docker 를 가져오고, 기본 package 인 git 과 ffmpeg 를 설치합니다.  
 * 추가 설치가 워낙 간단하여, 별도로 docker image 파일을 만들지는 않았습니다.  
 
 ```bash
@@ -103,7 +49,33 @@ $ docker pull nvcr.io/nvidia/pytorch:20.12-py3
 $ docker run --gpus all --name 2022AIChallenge --shm-size 8G -v ~/workspace/code:/root/workspace/code -v /DATA:/DATA -it nvcr.io/nvidia/pytorch:20.12-py3
 # # if using mAy-I trn-a -
 # $ docker run --gpus '"device=0,1,3"' --name 2022AIChallenge --shm-size 8G -v ~/workspace/code:/root/workspace/code -v /hdd/a/data/DATA:/DATA -it nvcr.io/nvidia/pytorch:20.12-py3
+```
 
+#### 과제 데이터 다운로드 및 셋업
+
+제공된 데이터는 `/DATA` 디렉토리에 다음과 같은 형태로 준비되어있음을 전제합니다. (재현성 검증 서버 기준)  
+
+```
+/DATA
+|-- test/
+    |-- images/
+        |-- 0dbc1884-9895-4294-91ef-77626a5ca826.png
+        |-- ...
+|-- train/
+    |-- images/
+        |-- 20201102_경기도_-_-_맑음_주간_실외_right_000079_0088055.png
+        |-- ...
+    |-- label/
+        |-- Train.json
+|-- sample_submission.json
+|-- Test_Images_Information.json
+|-- test.zip
+|-- train.zip
+```
+
+### 세부 환경 세팅
+
+```bash
 # Install git & ffmpeg
 # 'glib2' is a dependency of 'opencv'
 # type 6-69-6
@@ -111,6 +83,20 @@ $ apt-get update && apt-get install -y --no-install-recommends \
     git libxrender1 ffmpeg libglib2.0-0 && \
     rm -rf /var/lib/apt/lists/*
 ```
+
+도중에 `GPG error` 가 발생하면 [링크](https://eehoeskrap.tistory.com/454) 로 해결하면 됩니다.  
+
+#### 작업 폴더 세팅
+
+작업 폴더를 세팅하기 위해 제출한 코드를 `/USER` 디렉토리에 세팅합니다.  
+혹은 다음과 같이 `git` 에서 가져옵니다.  
+
+```bash
+(/USER) $ git clone https://github.com/PJunhyuk/2022AIChallenge
+```
+
+** 이후의 모든 코드는 특별한 언급이 없다면 current work directory(`/USER/2022AIChallenge`) 하에서의 실행을 전제합니다.  
+
 
 ### dependencies 설치
 
@@ -122,74 +108,59 @@ $ pip install -r requirements.txt
 
 ## 학습 및 추론
 
-```bash
-$ python dataset_prepare.py
-```
-
-### Train
+### 학습
 
 ```bash
-# homeUBT
-$ python train.py --batch 4 --cfg yolov5s.yaml --weights yolov5s --data dataset.yaml --img 640 --epochs 20
-# inf-a
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6 --data dataset.yaml --img 1280 --epochs 20
-$ python train.py --batch 16 --cfg yolov5s.yaml --weights yolov5s --data dataset.yaml --img 640
-# inf-b
-$ python train.py --batch 16 --cfg yolov5s.yaml --weights yolov5s --data dataset.yaml --img 640
-
-
-# trn-a
-$ python train.py --batch 4 --hyp data/hyps/hyp.scratch-high.yaml --cfg yolov5l6.yaml --weights yolov5l6 --data dataset.yaml --img 1280
-# inf-a
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6 --data dataset.yaml --img 1280
-# inf-b
-$ python train.py --batch 16 --cfg yolov5s.yaml --weights yolov5s --data dataset.yaml --img 640
-
-# inf-a exp7 6/10 19:30
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6 --data dataset_diet.yaml --img 1280
-# inf-b exp9 6/10 22:45
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6.pt --data dataset_diet.yaml --img 1280
-# inf-a exp8
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6.pt --data dataset.yaml --img 1280
-# trn-a exp 6/11 02:55
-$ python train.py --batch 9 --cfg yolov5m6.yaml --weights yolov5m6.pt --hyp data/hyps/hyp.scratch-high.yaml --data dataset.yaml --img 1280
-# inf-b exp10 6/11 10:17
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6.pt --data dataset.yaml --img 1280 --image-weights
-# inf-a 
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6.pt --data dataset.yaml --hyp data/hyps/hyp.VOC.yaml --img 1280 --image-weights
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6.pt --data dataset.yaml --img 1280 --image-weights --epoch-parts 5
-
-$ python train.py --batch 4 --cfg yolov5s6.yaml --weights yolov5s6.pt --data dataset.yaml --img 1280 --image-weights --epoch-parts 5
+$ python train.py
 ```
 
-### Val
+### 추론
 
 ```bash
-$ python val.py --batch 16 --weights runs/inf-a/exp4/weights/last.pt --data data/dataset.yaml --img 640 --task val --conf-thres 0.1
-$ python val.py --batch 16 --weights runs/inf-a/exp4/weights/last.pt --data data/dataset.yaml --img 640 --task val --conf-thres 0.005
+$ python predict.py
 ```
 
-### Predict
+- - -
 
-```bash
-$ python test_txt.py
-```
+## 상세 설명
 
-```bash
-$ python predict.py --weights best.pt --data data/dataset.yaml --imgsz 1280 --source /DATA/test/images --nosave
+repo 전반에 대한 상세 설명입니다.  
 
-$ python val.py --batch 4 --weights best.pt --data data/dataset.yaml --img 1280 --task test --save-json --conf-thres 0.1
-
-$ python val.py --batch 16 --weights runs/inf-a/exp4/weights/last.pt --data data/dataset.yaml --img 640 --task test --save-json --conf-thres 0.1
-$ python val.py --batch 16 --weights runs/inf-b/exp5/weights/last.pt --data data/dataset.yaml --img 640 --task test --save-json --conf-thres 0.1
-
-# inf-a
-$ python val.py --batch 4 --weights runs/inf-a/exp6/weights/last.pt --data data/dataset.yaml --img 1280 --task test --save-json --conf-thres 0.1
-
-# inf-b
-$ python val.py --batch 4 --weights runs/inf-b/exp6/weights/last.pt --data data/dataset.yaml --img 1280 --task test --save-json --conf-thres 0.1
+### 코드 상세 설명
 
 ```
+~/workspace/code/2022AIChallenge
+|-- data/
+    |-- hyps/
+	    |-- ...
+	|-- dataset.yaml
+|-- models
+|-- utils
+|-- predict.py
+|-- README.md
+|-- requirements.txt
+|-- train.py
+|-- val.py
+```
+
+### output 상세 설명
+
+TBD
+
+- - -
+
+## 학습 및 추론 시간 제한
+
+본 대회에서 제시된 재현 서버 사양은 다음과 같습니다.  
+
+> 재현 서버 사양: 10C, Nvidia T4 GPU x 1, 90MEM, 1TB
+
+그러나 본 대회를 준비함에 있어 사용한 내부 서버의 사양은 `GeForce RTX 2080 Ti`로 재현 서버 사양과 차이가 있으며, 사전에 위 재현 서버에서 테스트 해 볼 수가 없어, [구글 Colab](https://colab.research.google.com/?hl=ko)에서 기본적으로 제공하는 T4 환경에서 학습 및 추론 속도를 간단하게 비교해보았습니다.
+
+- T4: 1epoch 기준 train 65초, val 46초
+- 2080 Ti: 1epoch 기준 train 28초, val 17초
+
+즉, T4에서 학습 시간 36시간, 추론 시간 3시간의 제한은 2080 Ti에서는 학습 시간 약 15.51시간, 추론 시간 1.11시간의 제한과 동일함을 의미합니다.
 
 - - -
 
@@ -217,3 +188,9 @@ def init_seeds(seed=0):
 - 위에 언급한 `torch.nn.funcional.interpolate()` 함수, 혹은 obj loss를 계산하는 과정에서 연산되는 `bcewithlogitsloss`에서 Reproducibility가 깨지는 것으로 추정됩니다.
 
 때문에 본 repo에서는 완벽한 Reproducibility가 구현되어 있지는 않은 점을 감안 부탁드립니다. 그러나 위의 작업들로 최대한의 Reproducibility는 확보하여, 불가피한 정말 작은 차이들만이 존재합니다.  
+
+- - -
+
+## Reference
+
+- [yolov5](https://github.com/ultralytics/yolov5)

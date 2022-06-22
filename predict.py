@@ -17,11 +17,10 @@ ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 from models.common import DetectMultiBackend
 from utils.callbacks import Callbacks
 from utils.dataloaders import create_dataloader
-from utils.general import (LOGGER, check_dataset, check_img_size, check_requirements, check_yaml,
-                           colorstr, emojis, increment_path, non_max_suppression, print_args,
+from utils.general import (LOGGER, check_dataset, check_img_size, check_yaml,
+                           colorstr, increment_path, non_max_suppression, print_args,
                            scale_coords, xywh2xyxy, xyxy2xywh)
-from utils.metrics import ConfusionMatrix, ap_per_class, box_iou
-from utils.plots import output_to_target, plot_images, plot_val_study
+from utils.metrics import box_iou
 from utils.torch_utils import select_device, time_sync
 
 
@@ -133,7 +132,6 @@ def run(
                                     task='test')[0]
 
     seen = 0
-    confusion_matrix = ConfusionMatrix(nc=nc)
     names = {k: v for k, v in enumerate(model.names if hasattr(model, 'names') else model.module.names)}
     class_map = list(range(1000))
     s = ('%20s' + '%11s' * 7) % ('Class', 'Images', 'Labels', 'P', 'R', 'mAP@.5', 'mAP@.75', 'mAP@.5:.95')
