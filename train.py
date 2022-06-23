@@ -576,10 +576,13 @@ def parse_opt(known=False):
     parser.add_argument('--hyp', type=str, default=ROOT / 'data/hyps/hyp.scratch-low.yaml', help='hyperparameters path')
     parser.add_argument('--val-period', type=int, default=0, help='')
 
+    parser.add_argument('--epochs-tune', type=int, default=30)
+    parser.add_argument('--hyp-tune', type=str, default=ROOT / 'data/hyps/hyp.finetune.yaml', help='finetuning hyperparameters path')
+
     parser.add_argument('--no-data-prepare', action='store_true', help='skip dataset prepare step')
     parser.add_argument('--path_DATA_dir', type=str, default='/DATA', help='path to DATA')
     parser.add_argument('--project', default=ROOT / 'runs/train', help='save to project/name')
-    parser.add_argument('--name', default='final', help='save to project/name')
+    parser.add_argument('--name', default='official', help='save to project/name')
 
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
@@ -625,6 +628,7 @@ def main(opt, callbacks=Callbacks()):
     else:
         opt.data, opt.cfg, opt.hyp, opt.weights, opt.project = \
             check_file(opt.data), check_yaml(opt.cfg), check_yaml(opt.hyp), str(opt.weights), str(opt.project)  # checks
+        opt.hyp_tune = check_yaml(opt.hyp_tune)
         assert len(opt.cfg) or len(opt.weights), 'either --cfg or --weights must be specified'
         if opt.name == 'cfg':
             opt.name = Path(opt.cfg).stem  # use model.yaml as name
@@ -642,7 +646,23 @@ def main(opt, callbacks=Callbacks()):
         device = torch.device('cuda', LOCAL_RANK)
         dist.init_process_group(backend="nccl" if dist.is_nccl_available() else "gloo")
 
-    # Train
+    # Train - baseline
+    train(opt.hyp, opt, device, callbacks)
+    if WORLD_SIZE > 1 and RANK == 0:
+        LOGGER.info('Destroying process group... ')
+        dist.destroy_process_group()
+
+    # Checks
+    if RANK in {-1, 0}:
+        print_args(vars(opt))
+
+    # Train - finetuning
+    opt.save_dir = str(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))
+    opt.weights = 'runs/train/official/weights/last.pt'
+    opt.epochs = opt.epochs_tune
+    opt.no_image_weights = True
+    opt.image_weights = not opt.no_image_weights
+    opt.hyp = opt.hyp_tune
     train(opt.hyp, opt, device, callbacks)
     if WORLD_SIZE > 1 and RANK == 0:
         LOGGER.info('Destroying process group... ')
