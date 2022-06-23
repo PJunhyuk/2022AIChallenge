@@ -15,7 +15,7 @@
 
 #### docker 설치
 
-본 repo 는 간편한 설치를 위해 `docker` 를 사용합니다. 서버에 `docker` 가 설치되어 있지 않은 경우 다음과 같은 방식으로 설치 가능합니다.  
+본 repo 는 간편한 설치를 위해 `docker` 를 권장합니다. 서버에 `docker` 가 설치되어 있지 않은 경우 다음과 같은 방식으로 설치 가능합니다.  
 
 ```bash
 $ sudo apt-get remove docker docker-engine docker.io
@@ -41,8 +41,7 @@ $ sudo systemctl restart docker
 
 #### docker 및 git, ffmpeg (for opencv) 세팅
 
-여러 docker image 중 `nvidia/pytorch` 의 기본 이미지를 활용합니다. 다음과 같은 방식으로 docker 를 가져오고, 기본 package 인 git 과 ffmpeg 를 설치합니다.  
-* 추가 설치가 워낙 간단하여, 별도로 docker image 파일을 만들지는 않았습니다.  
+여러 docker image 중 `nvidia/pytorch` 의 기본 이미지를 활용합니다. 다음과 같은 방식으로 docker 를 가져옵니다.  
 
 ```bash
 $ docker pull nvcr.io/nvidia/pytorch:20.12-py3
@@ -73,6 +72,8 @@ $ docker run --gpus all --name 2022AIChallenge --shm-size 8G -v ~/workspace/code
 
 ### 세부 환경 세팅
 
+기본 package 인 git 과 ffmpeg 를 설치해야 합니다.  
+
 ```bash
 # Install git & ffmpeg
 # 'glib2' is a dependency of 'opencv'
@@ -95,8 +96,7 @@ $ apt-get update && apt-get install -y --no-install-recommends \
 
 ** 이후의 모든 코드는 특별한 언급이 없다면 current work directory(`/USER/2022AIChallenge`) 하에서의 실행을 전제합니다.  
 
-
-### dependencies 설치
+#### dependencies 설치
 
 재현성 검증 서버에서는 이후 모든 코드를 Jupyter 노트북 Terminal 에서의 실행을 전제합니다.  
 
@@ -114,6 +114,10 @@ $ pip install -r requirements.txt
 $ python train.py
 ```
 
+> 주의! baseline 학습 후 finetuning 과정에서 pre-trained weights 로 사용하는 가중치 파일의 경로가 `runs/train/official/weights/last.pt` 로 하드코딩 되어 있습니다. 최초 실행 때는 문제가 없지만, 반복 실행하여 baseline 학습 후 생성되는 폴더가 `runs/train/official7` 식으로 변경된다면 이 부분을 변경해주어야 합니다. 이는 `train.py` 코드의 661번째 줄에서 변경하실 수 있습니다.
+
+> 혹은 아예 매 실행 전 `$ rm -r runs/` 명령어로 `runs` 경로를 초기화해줘도 괜찮습니다.
+
 ### 추론
 
 ```bash
@@ -127,6 +131,8 @@ $ python predict.py
 repo 전반에 대한 상세 설명입니다.  
 
 ### 코드 상세 설명
+
+제출한 코드는 다음과 같은 형태로 이루어져 있습니다.  
 
 ```
 /USER/2022AIChallenge
@@ -146,13 +152,15 @@ repo 전반에 대한 상세 설명입니다.
 |-- val.py
 ```
 
-### `submission` 폴더 설명
+#### `submission` 폴더 설명
 
-- `baseline_last.pt` : yolov5x6.pt 에서 hyp.scratch-low.yaml 을 기반으로 50 epoch 학습한 모델 가중치 파일입니다.
-- `tune_last.pt` : baseline_last.pt 에서 hyp.finetune.yaml 을 기반으로 15 epoch 추가 학습한 모델 가중치 파일입니다. *최고점 제출물에 대응하는 모델 가중치 파일입니다.*
-- `best_preds_cut.json` : *최고점 Submission 파일입니다.*
+`submission` 폴더에는 최고점 제출물에 대응하는 파일들이 담겨 있습니다. 각각에 대한 설명은 다음과 같습니다.  
 
-다음의 명령어를 통해 `tune_last.pt` 에서 `best_preds_cut.json` 을 직접 생성할 수 있습니다.  
+- `baseline_last.pt` : yolov5x6.pt 에서 hyp.scratch-low.yaml 을 기반으로 50 epoch 학습한 모델 가중치 파일입니다. 새롭게 train 한다면 얻을 수 있는 `runs/train/official/weights/last.pt` 파일에 해당합니다.
+- `tune_last.pt` : baseline_last.pt 에서 hyp.finetune.yaml 을 기반으로 15 epoch 추가 학습한 모델 가중치 파일입니다. 새롭게 train 한다면 얻을 수 있는 `runs/train/official2/weights/last.pt` 파일에 해당합니다. **최고점 제출물에 대응하는 모델 가중치 파일입니다.**
+- `best_preds_cut.json` : **최고점 Submission 파일입니다.**
+
+다음의 명령어를 통해 `tune_last.pt` 에서 `best_preds_cut.json` 을 생성하는 추론 과정을 직접 재현할 수 있습니다.  
 
 ```bash
 $ python predict.py --weights submission/tune_last.pt
@@ -164,9 +172,7 @@ $ python predict.py --weights submission/tune_last.pt
 
 #### 1. dataset 폴더 생성 및 세팅
 
-`train.py` 를 실행하면 우선 학습에 사용할 데이터셋 폴더를 생성하고 세팅하는 절차가 진행됩니다. `train.py` 의 `data_prepare()` 함수를 사용합니다.  
-`/DATA` 폴더의 데이터를 읽어 `../dataset/` 폴더에 학습에 적합한 형태로 이미지를 복사하여 세팅하고, 학습에 적합한 형태로 label 파일들을 생성합니다.  
-재현성 검증 서버 기준 30분 정도 소요됩니다.  
+`train.py` 를 실행하면 우선 학습에 사용할 데이터셋 폴더를 생성하고 세팅하는 절차가 진행됩니다. `train.py` 의 `data_prepare()` 함수를 사용합니다. `/DATA` 폴더의 데이터를 읽어 `../dataset/` 폴더에 학습에 적합한 형태로 이미지를 복사하여 세팅하고, 학습에 적합한 형태로 label 파일들을 생성합니다. 재현성 검증 서버 기준 30분 정도 소요됩니다.  
 
 ```
 data preparing
@@ -176,6 +182,12 @@ generate dataset/train, dataset/val
 100%|█████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 16258/16258 [04:45<00:00, 56.95it/s]
 100%|███████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 118483/118483 [28:13<00:00, 69.97it/s]
 100%|████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████████| 19521/19521 [00:00<00:00, 1632512.03it/s]
+```
+
+최초 학습 이후 다시 학습할 때는 이미 `../dataset/` 폴더가 생성되어 있기 때문에, 이 과정을 반복할 필요가 없습니다. `--no-data-prepare` 플래그로 이 과정을 생략할 수 있습니다.  
+
+```bash
+$ python train.py --no-data-prepare
 ```
 
 #### 2. baseline 학습
@@ -194,7 +206,7 @@ generate dataset/train, dataset/val
 
 재현성 검증 서버 기준 한 epoch 학습에 30분 정도 소요됩니다. 50 epoch 을 학습하기 때문에 전체로는 26시간 정도 소요됩니다.  
 
-```
+```bash
 train: weights=yolov5x6.pt, data=data/dataset.yaml, epochs=50, epoch_parts=15, batch_size=2, no_image_weights=False, imgsz=1280, hyp=data/hyps/hyp.scratch-low.yaml, val_period=0, no_data_prepare=False, path_DATA_dir=/DATA, project=runs/train, name=final, cfg=, rect=False, resume=False, nosave=False, noautoanchor=False, noplots=False, bucket=, cache=None, device=, multi_scale=False, optimizer=SGD, sync_bn=False, workers=8, exist_ok=False, quad=False, cos_lr=False, label_smoothing=0.0, patience=100, freeze=[0], save_period=-1, local_rank=-1, image_weights=True, noval=True
 hyperparameters: lr0=0.01, lrf=0.01, momentum=0.937, weight_decay=0.0005, warmup_epochs=3.0, warmup_momentum=0.8, warmup_bias_lr=0.1, box=0.05, cls=0.5, cls_pw=1.0, obj=1.0, obj_pw=1.0, iou_t=0.2, anchor_t=4.0, fl_gamma=0.0, hsv_h=0.015, hsv_s=0.7, hsv_v=0.4, degrees=0.0, translate=0.1, scale=0.5, shear=0.0, perspective=0.0, flipud=0.0, fliplr=0.5, mosaic=1.0, mixup=0.0, copy_paste=0.0
 Downloading https://github.com/ultralytics/yolov5/releases/download/v6.1/yolov5x6.pt to yolov5x6.pt...
@@ -209,10 +221,10 @@ Logging results to runs/train/final
 Starting training for 50 epochs...
 
      Epoch   gpu_mem       box       obj       cls    labels  img_size
-      0/49     14.1G   0.07297   0.07933   0.05713        29      1280: 100%|██████████| 721/721 [30:20<00:00,  2.52s/it]                                                                                                                               
+      0/49     14.1G   0.07297   0.07933   0.05713        29      1280: 100%|██████████| 721/721 [30:20<00:00,  2.52s/it]
 
      Epoch   gpu_mem       box       obj       cls    labels  img_size
-      1/49     14.1G    0.0594   0.04674   0.04433        18      1280: 100%|██████████| 721/721 [30:23<00:00,  2.53s/it]                                                                                                                               
+      1/49     14.1G    0.0594   0.04674   0.04433        18      1280: 100%|██████████| 721/721 [30:23<00:00,  2.53s/it]
 ```
 
 flag 없이 실행한다면 output 은 다음과 같은 형태로 생성됩니다.
@@ -276,9 +288,35 @@ flag 없이 실행한다면 output 은 다음과 같은 형태로 생성됩니�
 --imgsz 1536
 ```
 
+flag 없이 실행한다면 `runs/val/official/` 경로에 Submission 형식과 맞는 `best_preds.json` 파일을 생성합니다.  
+
 #### 2. conf cut
 
-TBD
+Submission 파일의 20MB 용량 제한을 피하기 위해, 용량이 20MB 보다 작지만 가장 근접한 Submission 파일 생성을 위한 conf cut 값을 찾는 과정입니다. `runs/val/official/` 경로에 Submission 형식과 맞고 용량이 20MB 보다 낮은 `best_preds_cut.json` 파일을 생성합니다. **이것이 최고점 제출물에 대응하는 Submission 파일이 됩니다.**  
+
+flag 없이 실행한다면 output 은 다음과 같은 형태로 생성됩니다.  
+
+```
+/USER/2022AIChallenge
+|-- runs/
+    |-- val/
+        |-- official/
+            |-- best_preds_cut.json
+            |-- best_preds.json
+```
+
+재현성 검증 서버 기준 추론에는 2시간 정도가 소요됩니다. conf cut 과정은 10분 미만으로 소요되므로, 위 과정을 모두 포함한 추론에 소요된 총 시간은 재현성 검증 시간 기준 2.5시간 이내로, 3시간 제한을 충족합니다.  
+
+```bash
+root@7c32234d1060:/USER/2022AIChallenge# python predict.py --weights submission/tune_last.pt
+predict: weights=['submission/tune_last.pt'], data=data/dataset.yaml, batch_size=16, conf_thres=0.01, iou_thres=0.7, imgsz=1536, project=runs/val, name=official, workers=8, device=, half=False
+YOLOv5 🚀 f6d6793 Python-3.8.5 torch-1.7.1 CUDA:0 (Tesla T4, 15110MiB)
+
+Fusing layers... 
+Model summary: 574 layers, 140095828 parameters, 0 gradients
+test: Scanning '/USER/2022AIChallenge/../dataset/test_imgs.cache' images and labels... 0 found, 19521 missing, 0 empty, 0 corrupt: 100%|██████████| 19521/19521 [00:00<?, ?it/s]                                                                        
+               Class     Images     Labels          P          R     mAP@.5    mAP@.75 mAP@.5:.95:   4%|▍         | 54/1221 [05:49<2:09:41,  6.67s/it]
+```
 
 - - -
 
