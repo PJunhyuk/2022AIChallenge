@@ -141,7 +141,7 @@ def run(
     callbacks.run('on_val_start')
     pbar = tqdm(dataloader, desc=s, bar_format='{l_bar}{bar:10}{r_bar}{bar:-10b}')  # progress bar
 
-    with open('/DATA/test/Test_Images_Information.json') as f:
+    with open('/DATA/Test_Images_Information.json') as f:
         json_data = json.load(f)
 
         # generate images_id_name dict
